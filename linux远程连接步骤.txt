@@ -1,0 +1,23 @@
+1、在windows中找到控制面板，找到网络和Internet,找到网络和共享中心，找到更改适配器设置，启动VN8.
+
+2、启动ubuntu系统，安ctrl+Alt+T，唤出终端
+
+3、更新软件源，键入命令sudo apt update
+
+4、安装vm-tools开启复制粘贴功能，键入命令sudo apt install open-vm-tools-desktop -y（注意空格）
+
+5、重启
+
+6、开启远程连接功能，安装ssh服务，开启终端，键入命令sudo apt install -y openssh-server
+
+7、重新生成key，键入命令sudo ssh-keygen -A
+
+8、启动远程连接服务，键入命令sudo systemctl start ssh
+
+9、查看服务是否启动成功，键入命令sudo systemctl status ssh,看到绿色active (running)，代表启动成功，其他的代表启动失败。按q离开当前页面
+
+10、查看本机ip，键入命令ip a。
+
+11、使用远程连接功能，打开windows桌面的xshell，创建新连接，在主机号输入ip，用户名xx，密码      123456，连接后显示xx@xx-VMware-Virtual-Platform:~$ 代表连接成功，其他为失败。
+
+12、AI连接提示词：请帮我连接vm中的Linux虚拟机，已经开启了ssh服务，本地有xshell工具，用户名是xx，密码是123456，ip是：192.168.xx.xx(自己查ip修改)。
