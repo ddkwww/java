@@ -1,0 +1,21 @@
+:root{
+  --bg-0:#070a14;
+  --bg-1:#0d1426;
+  --bg-2:#141d36;
+  --qi:#67e8f9;        /* 灵气青 */
+  --gold:#e9c878;      /* 仙金 */
+  --gold-2:#f5dd9b;
+  --violet:#8b6dff;    /* 紫霄 */
+  --ink:#e9eefb;
+  --ink-dim:#8b9bbd;
+  --line:rgba(140,170,220,.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#app{height:100%}
+body{
+  font-family:"Noto Serif SC","Songti SC","STSong",ui-serif,Georgia,serif;
+  background:radial-gradient(120% 120% at 80% 10%,var(--bg-2) 0%,var(--bg-1) 45%,var(--bg-0) 100%);
+  color:var(--ink);
+  overflow:hidden;
+  position:relative;
+}
