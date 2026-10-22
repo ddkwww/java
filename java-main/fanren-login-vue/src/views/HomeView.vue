@@ -13,6 +13,10 @@
           <a :class="{ active: activeNav === 'cave' }" @click.prevent="scrollTo('cave')">洞府</a>
           <a :class="{ active: activeNav === 'dao' }" @click.prevent="scrollTo('dao')">论道</a>
         </nav>
+
+        <!-- 后台管理系统入口 -->
+        <a class="nav-admin" @click.prevent="goAdmin">后台管理系统</a>
+
         <div class="user-box">
           <span class="user-chip" @click="scrollTo('cave')">
             <i class="dot"></i>{{ auth.user || '无名' }} · {{ auth.profile?.realm || '炼气' }}
@@ -257,6 +261,10 @@ function goDetail(id) {
   router.push({ name: 'manual', params: { id } })
 }
 
+function goAdmin() {
+  router.push('/admin/login')
+}
+
 function onLogout() {
   auth.logout()
   router.push('/login')
@@ -323,6 +331,18 @@ function onLogout() {
   content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:2px;
   width:16px;height:2px;border-radius:2px;
   background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+.nav-admin{
+  margin-left:6px;padding:8px 16px;border-radius:999px;cursor:pointer;
+  font-size:14px;letter-spacing:2px;user-select:none;transition:.2s;
+  color:#0c1322;font-weight:700;
+  background:linear-gradient(135deg,var(--gold-2),var(--gold) 50%,#c79a44);
+  border:1px solid transparent;
+  box-shadow:0 4px 16px rgba(233,200,120,.25);
+}
+.nav-admin:hover{
+  transform:translateY(-1px);
+  box-shadow:0 8px 24px rgba(233,200,120,.45);
 }
 .user-box{margin-left:auto;display:flex;align-items:center;gap:12px}
 .user-chip{
@@ -667,6 +687,7 @@ function onLogout() {
   .navbar{padding:0 16px;gap:10px;height:58px}
   .brand-name{display:none}
   .nav-links a{padding:7px 9px;letter-spacing:1px;font-size:13px}
+  .nav-admin{padding:6px 11px;font-size:12px;letter-spacing:1px}
   .user-chip{display:none}
   .title{font-size:36px;letter-spacing:12px;text-indent:12px}
   .subtitle{letter-spacing:4px}

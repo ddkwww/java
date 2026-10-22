@@ -12,14 +12,21 @@ import java.util.stream.Collectors;
 
 /**
  * 藏经阁接口（契约见前端 src/api/sutra.js）：
- *   GET /api/manuals?category=&realm=&grade=&q=
+ *   GET  /api/manuals?category=&realm=&grade=&q=
  *       -> { items: [{ id, name, category, grade, realm, desc, origin }] }
  *       无参：返回全部秘籍；q 非空：关键字搜索，并可叠加 分类/境界/品阶 筛选
- *   GET /api/manuals/facets
+ *   GET  /api/manuals/facets
  *       -> { categories:[...], realms:[...], grades:[...] }（供前端构建筛选器）
- *   GET /api/manuals/{id}
+ *   GET  /api/manuals/{id}
  *       -> { id, name, category, grade, realm, desc, origin, image }（单卷详情）
  *          未找到返回 404
+ *   POST   /api/manuals           body: { name, category, grade, realm, desc, origin, image }
+ *       -> 新建成功返回该卷（含生成的主键 id）
+ *   PUT    /api/manuals/{id}      body: 同上（仅覆盖传入字段）
+ *       -> 更新成功返回该卷；id 不存在返回 404
+ *   DELETE /api/manuals/{id}
+ *       -> { ok:true }；id 不存在返回 404
+ *   注：写接口与 GET 保持一致，暂未强制鉴权（演示用）；接入正式管理后台时建议加角色校验。
  */
 @RestController
 @RequestMapping("/api/manuals")
@@ -75,6 +82,50 @@ public class SutraController {
     public Manual detail(@PathVariable Long id) {
         return manualRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "未找到该卷秘籍：id=" + id));
+    }
+
+    /** 新增功法秘籍：body { name, category, grade, realm, desc, origin, image } */
+    @PostMapping
+    public Manual create(@RequestBody Manual m) {
+        if (isBlank(m.getName())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "名称不能为空");
+        }
+        Manual entity = new Manual();
+        entity.setName(m.getName());
+        entity.setCategory(m.getCategory());
+        entity.setGrade(m.getGrade());
+        entity.setRealm(m.getRealm());
+        entity.setDesc(m.getDesc());
+        entity.setOrigin(m.getOrigin());
+        entity.setImage(m.getImage());
+        return manualRepository.save(entity);
+    }
+
+    /** 更新功法秘籍：patch 语义，仅覆盖传入字段，保留 id 与 createdAt */
+    @PutMapping("/{id}")
+    public Manual update(@PathVariable Long id, @RequestBody Manual m) {
+        Manual existing = manualRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "未找到该卷秘籍：id=" + id));
+        if (!isBlank(m.getName())) existing.setName(m.getName());
+        if (!isBlank(m.getCategory())) existing.setCategory(m.getCategory());
+        if (!isBlank(m.getGrade())) existing.setGrade(m.getGrade());
+        if (!isBlank(m.getRealm())) existing.setRealm(m.getRealm());
+        if (m.getDesc() != null) existing.setDesc(m.getDesc());
+        if (m.getOrigin() != null) existing.setOrigin(m.getOrigin());
+        if (m.getImage() != null) existing.setImage(m.getImage());
+        return manualRepository.save(existing);
+    }
+
+    /** 删除功法秘籍 */
+    @DeleteMapping("/{id}")
+    public Map<String, Object> delete(@PathVariable Long id) {
+        if (!manualRepository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "未找到该卷秘籍：id=" + id);
+        }
+        manualRepository.deleteById(id);
+        Map<String, Object> resp = new LinkedHashMap<>(1);
+        resp.put("ok", true);
+        return resp;
     }
 
     private boolean isBlank(String s) {

@@ -1,8 +1,8 @@
 <template>
   <section class="form-side">
     <form class="card" @submit.prevent="onSubmit" autocomplete="off">
-      <h2>踏入仙途</h2>
-      <p class="hint">请输入道号与法诀，以证仙缘</p>
+      <h2>{{ title }}</h2>
+      <p class="hint">{{ subtitle }}</p>
 
       <div class="field">
         <span class="ico">
@@ -24,10 +24,10 @@
         <a href="#" @click.prevent>遗忘法诀？</a>
       </div>
 
-      <p class="alt">尚无仙缘？<router-link to="/register">前往入门</router-link></p>
+      <p class="alt" v-if="showRegister">尚无仙缘？<router-link to="/register">前往入门</router-link></p>
 
       <button class="btn" type="submit" :disabled="loading">
-        {{ loading ? '渡劫中…' : '登 仙' }}
+        {{ loading ? '渡劫中…' : submitText }}
       </button>
     </form>
 
@@ -43,6 +43,15 @@ import Toast from './Toast.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+
+// 可配置项：后台管理系统登录页复用本组件时，关闭注册入口并自定义文案
+const props = defineProps({
+  title: { type: String, default: '踏入仙途' },
+  subtitle: { type: String, default: '请输入道号与法诀，以证仙缘' },
+  submitText: { type: String, default: '登 仙' },
+  showRegister: { type: Boolean, default: true },
+  redirect: { type: String, default: '/' }
+})
 
 const username = ref('')
 const password = ref('')
@@ -79,7 +88,7 @@ async function onSubmit() {
   try {
     await auth.login(username.value.trim(), password.value, { remember: remember.value })
     show('仙缘已证 · 欢迎归来，' + username.value.trim())
-    setTimeout(() => router.push('/'), 600)
+    setTimeout(() => router.push(props.redirect), 600)
   } catch (e) {
     show(e.message || '渡劫失败，请再试一次')
   } finally {

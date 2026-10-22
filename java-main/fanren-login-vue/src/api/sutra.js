@@ -162,3 +162,75 @@ export async function fetchManualDetail(id) {
     return { manual: m || null, source: 'fallback' }
   }
 }
+
+// ===== 后台管理 · 增删改（与 GET 一致：未配置后端走本地 mock，已配置走真实接口）=====
+// 本地 mock 的写操作直接作用于 MOCK_MANUALS（模块级数组），本次会话内刷新列表可见，
+// 整页刷新后复原（与 GET 的本地模式行为一致）。
+function nextMockId() {
+  return MOCK_MANUALS.reduce((max, x) => Math.max(max, Number(x.id) || 0), 0) + 1
+}
+
+// 新增功法秘籍：body { name, category, grade, realm, desc, origin, image }
+export async function createManual(payload) {
+  if (!BASE) {
+    await delay(600)
+    const item = { id: nextMockId(), ...payload }
+    MOCK_MANUALS.push(item)
+    return item
+  }
+  const res = await fetch(`${BASE}/api/manuals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) {
+    let msg = '创建失败'
+    try { msg = (await res.json()).message || msg } catch (_) {}
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+// 更新功法秘籍：patch 模式，仅覆盖传入字段，保留 id
+export async function updateManual(id, payload) {
+  if (!BASE) {
+    await delay(600)
+    const idx = MOCK_MANUALS.findIndex((x) => String(x.id) === String(id))
+    if (idx >= 0) {
+      MOCK_MANUALS[idx] = { ...MOCK_MANUALS[idx], ...payload, id: MOCK_MANUALS[idx].id }
+      return MOCK_MANUALS[idx]
+    }
+    throw new Error('未找到该卷秘籍')
+  }
+  const res = await fetch(`${BASE}/api/manuals/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) {
+    let msg = '更新失败'
+    try { msg = (await res.json()).message || msg } catch (_) {}
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+// 删除功法秘籍
+export async function deleteManual(id) {
+  if (!BASE) {
+    await delay(400)
+    const idx = MOCK_MANUALS.findIndex((x) => String(x.id) === String(id))
+    if (idx >= 0) MOCK_MANUALS.splice(idx, 1)
+    return { ok: true }
+  }
+  const res = await fetch(`${BASE}/api/manuals/${id}`, {
+    method: 'DELETE',
+    headers: { ...authHeader() }
+  })
+  if (!res.ok) {
+    let msg = '删除失败'
+    try { msg = (await res.json()).message || msg } catch (_) {}
+    throw new Error(msg)
+  }
+  return { ok: true }
+}
