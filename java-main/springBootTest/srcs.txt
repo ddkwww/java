@@ -1,0 +1,17 @@
+src/main/java/com/fenglin/springboottest/config/CorsConfig.java
+src/main/java/com/fenglin/springboottest/config/UploadConfig.java
+src/main/java/com/fenglin/springboottest/config/UploadPaths.java
+src/main/java/com/fenglin/springboottest/controller/AuthController.java
+src/main/java/com/fenglin/springboottest/controller/SearchController.java
+src/main/java/com/fenglin/springboottest/controller/SutraController.java
+src/main/java/com/fenglin/springboottest/controller/TreasureController.java
+src/main/java/com/fenglin/springboottest/controller/UploadController.java
+src/main/java/com/fenglin/springboottest/entity/Manual.java
+src/main/java/com/fenglin/springboottest/entity/Treasure.java
+src/main/java/com/fenglin/springboottest/entity/User.java
+src/main/java/com/fenglin/springboottest/repository/ManualRepository.java
+src/main/java/com/fenglin/springboottest/repository/TreasureRepository.java
+src/main/java/com/fenglin/springboottest/repository/UserRepository.java
+src/main/java/com/fenglin/springboottest/SpringBootTestApplication.java
+src/main/java/com/fenglin/springboottest/SutraDataSeeder.java
+src/main/java/com/fenglin/springboottest/TreasureDataSeeder.java
