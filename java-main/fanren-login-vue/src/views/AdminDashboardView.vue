@@ -1,12 +1,35 @@
 <template>
   <div class="admin">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="sb-brand">
+        <span class="seal">藏</span>
+        <div>
+          <div class="sb-title">藏经阁</div>
+          <div class="sb-sub">后台管理系统</div>
+        </div>
+      </div>
+      <nav class="sb-nav">
+        <button class="sb-item" :class="{ active: tab === 'manual' }" type="button" @click="tab = 'manual'">功法列表</button>
+        <button class="sb-item" :class="{ active: tab === 'treasure' }" type="button" @click="tab = 'treasure'">法宝列表</button>
+        <button class="sb-item" type="button" @click="openCreate">＋ 新增{{ tab === 'manual' ? '功法' : '法宝' }}</button>
+        <router-link to="/" class="sb-item">返回首页</router-link>
+        <button class="sb-item logout" type="button" @click="onLogout">退出登录</button>
+      </nav>
+      <div class="sb-foot">
+        <div class="sb-stat"><b>{{ list.length }}</b> {{ tab === 'manual' ? '卷秘籍' : '件法宝' }}</div>
+        <div class="sb-stat"><b>{{ (tab === 'manual' ? categories : treasureCategories).length }}</b> 类{{ tab === 'manual' ? '功法' : '法宝' }}</div>
+      </div>
+    </aside>
+
+    <div class="main">
     <!-- 顶栏 -->
     <header class="topbar">
       <div class="brand">
         <span class="seal">藏</span>
         <div>
           <div class="t1">藏经阁 · 后台管理系统</div>
-          <div class="t2">功法秘籍数据管理（增删改查）</div>
+          <div class="t2">{{ tab === 'manual' ? '功法秘籍数据管理（增删改查）' : '法宝珍奇数据管理（增删改查）' }}</div>
         </div>
       </div>
       <div class="actions">
@@ -20,9 +43,9 @@
     <div class="toolbar">
       <div class="search">
         <span class="si">寻</span>
-        <input v-model="keyword" type="text" placeholder="按名称 / 分类 / 出处 搜索…" @keyup.enter="load" />
+        <input v-model="keyword" type="text" :placeholder="tab === 'manual' ? '按名称 / 分类 / 出处 搜索…' : '按名称 / 类别 / 出处 搜索…'" @keyup.enter="load" />
       </div>
-      <button class="btn-add" @click="openCreate">＋ 新增功法</button>
+      <button class="btn-add" @click="openCreate">＋ 新增{{ tab === 'manual' ? '功法' : '法宝' }}</button>
     </div>
 
     <!-- 表格 -->
@@ -32,9 +55,9 @@
           <tr>
             <th class="c-id">ID</th>
             <th>名称</th>
-            <th>分类</th>
+            <th>{{ tab === 'manual' ? '分类' : '类别' }}</th>
             <th>品阶</th>
-            <th>境界</th>
+            <th>{{ tab === 'manual' ? '境界' : '适用境界' }}</th>
             <th>出处</th>
             <th class="c-op">操作</th>
           </tr>
@@ -53,20 +76,34 @@
             </td>
           </tr>
           <tr v-if="!loading && !filtered.length">
-            <td colspan="7" class="empty">藏经阁中尚无此典。</td>
+            <td colspan="7" class="empty">{{ tab === 'manual' ? '藏经阁中尚无此典。' : '法宝阁中尚无此宝。' }}</td>
           </tr>
         </tbody>
       </table>
 
-      <div v-if="loading" class="loading">读取藏经中…</div>
-      <div class="count">共 {{ filtered.length }} 卷</div>
+      <div v-if="loading" class="loading">读取中…</div>
+      <div class="count">共 {{ filtered.length }} {{ tab === 'manual' ? '卷' : '件' }}</div>
     </div>
 
-    <!-- 表单弹窗 -->
+    </div>
+
+    <!-- 功法表单弹窗 -->
     <ManualFormModal
+      v-if="tab === 'manual'"
       :visible="modalVisible"
       :editing="editing"
       :categories="categories"
+      :saving="saving"
+      @close="onModalClose"
+      @submit="onSubmitted"
+    />
+
+    <!-- 法宝表单弹窗 -->
+    <TreasureFormModal
+      v-if="tab === 'treasure'"
+      :visible="modalVisible"
+      :editing="editing"
+      :categories="treasureCategories"
       :saving="saving"
       @close="onModalClose"
       @submit="onSubmitted"
@@ -81,16 +118,23 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { fetchManuals, fetchFacets, createManual, updateManual, deleteManual } from '../api/sutra'
+import { fetchTreasures, fetchTreasureFacets, createTreasure, updateTreasure, deleteTreasure } from '../api/treasure'
 import ManualFormModal from '../components/ManualFormModal.vue'
+import TreasureFormModal from '../components/TreasureFormModal.vue'
 import Toast from '../components/Toast.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
 
-const list = ref([])
+const tab = ref('manual')                 // 'manual' | 'treasure'
+const manualList = ref([])
+const treasureList = ref([])
+const list = computed(() => (tab.value === 'manual' ? manualList.value : treasureList.value))
+
 const loading = ref(false)
 const keyword = ref('')
-const categories = ref([])
+const categories = ref([])            // 功法分类
+const treasureCategories = ref([])    // 法宝类别
 const modalVisible = ref(false)
 const editing = ref(null)
 const saving = ref(false)
@@ -117,10 +161,16 @@ const filtered = computed(() => {
 async function load() {
   loading.value = true
   try {
-    const res = await fetchManuals({})
-    list.value = res.items || []
-    const f = await fetchFacets()
-    categories.value = f.categories || []
+    const [m, mf, t, tf] = await Promise.all([
+      fetchManuals({}),
+      fetchFacets(),
+      fetchTreasures({}),
+      fetchTreasureFacets()
+    ])
+    manualList.value = m.items || []
+    categories.value = mf.categories || []
+    treasureList.value = t.items || []
+    treasureCategories.value = tf.categories || []
   } catch (e) {
     toast(e.message || '读取失败')
   } finally {
@@ -143,12 +193,22 @@ function onModalClose() {
 async function onSubmitted(payload) {
   saving.value = true
   try {
-    if (editing.value) {
-      await updateManual(editing.value.id, payload)
-      toast('已更新：' + payload.name)
+    if (tab.value === 'manual') {
+      if (editing.value) {
+        await updateManual(editing.value.id, payload)
+        toast('已更新：' + payload.name)
+      } else {
+        await createManual(payload)
+        toast('已新增：' + payload.name)
+      }
     } else {
-      await createManual(payload)
-      toast('已新增：' + payload.name)
+      if (editing.value) {
+        await updateTreasure(editing.value.id, payload)
+        toast('已更新：' + payload.name)
+      } else {
+        await createTreasure(payload)
+        toast('已新增：' + payload.name)
+      }
     }
     modalVisible.value = false
     await load()
@@ -162,8 +222,13 @@ async function onSubmitted(payload) {
 async function onDelete(it) {
   if (!confirm(`确定删除「${it.name}」？此操作不可恢复。`)) return
   try {
-    await deleteManual(it.id)
-    toast('已删除：' + it.name)
+    if (tab.value === 'manual') {
+      await deleteManual(it.id)
+      toast('已删除：' + it.name)
+    } else {
+      await deleteTreasure(it.id)
+      toast('已删除：' + it.name)
+    }
     await load()
   } catch (e) {
     toast(e.message || '删除失败')
@@ -181,7 +246,17 @@ onUnmounted(() => clearTimeout(toastTimer))
 
 <style scoped>
 .admin{
-  position:relative;z-index:2;height:100%;overflow:auto;
+  position:relative;z-index:2;height:100%;
+  display:flex;overflow:hidden;
+}
+.sidebar{
+  width:240px;flex:none;height:100%;
+  display:flex;flex-direction:column;
+  background:rgba(7,10,20,.92);border-right:1px solid var(--line);
+  padding:22px 16px;
+}
+.main{
+  flex:1;min-width:0;height:100%;overflow:auto;
   padding:0 0 40px;
 }
 /* 顶栏 */
@@ -267,10 +342,38 @@ onUnmounted(() => clearTimeout(toastTimer))
 .loading{text-align:center;color:var(--ink-dim);letter-spacing:3px;padding:24px 0}
 .count{padding:12px 16px 0;color:var(--ink-dim);font-size:13px;letter-spacing:2px}
 
+/* 侧边栏内部样式 */
+.sb-brand{display:flex;align-items:center;gap:12px;padding:4px 6px 18px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.sb-title{font-size:18px;letter-spacing:3px;color:var(--ink);font-weight:700}
+.sb-sub{font-size:12px;letter-spacing:2px;color:var(--ink-dim);margin-top:2px}
+.sb-nav{display:flex;flex-direction:column;gap:6px;flex:1}
+.sb-item{
+  display:flex;align-items:center;width:100%;text-align:left;cursor:pointer;
+  padding:11px 14px;border-radius:10px;font-family:inherit;font-size:14px;letter-spacing:2px;
+  color:var(--ink-dim);text-decoration:none;background:transparent;border:1px solid transparent;transition:.2s;
+}
+.sb-item:hover{color:var(--ink);background:rgba(103,232,249,.08)}
+.sb-item.active{color:var(--gold);background:rgba(233,200,120,.12);border-color:rgba(233,200,120,.3)}
+.sb-item.logout{color:#ff9a9a}
+.sb-item.logout:hover{background:rgba(255,120,120,.1)}
+.sb-foot{padding-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.sb-stat{font-size:13px;color:var(--ink-dim);letter-spacing:1px}
+.sb-stat b{color:var(--gold);font-size:16px;margin-right:4px}
+
+@media(max-width:860px){
+  .admin{flex-direction:column;overflow:auto}
+  .sidebar{width:100%;height:auto;flex-direction:row;align-items:center;gap:12px;padding:12px 16px;border-right:none;border-bottom:1px solid var(--line)}
+  .sb-brand{border-bottom:none;margin-bottom:0;padding:0;flex:none}
+  .sb-sub{display:none}
+  .sb-nav{flex-direction:row;flex:1;flex-wrap:wrap;gap:8px;margin:0}
+  .sb-item{padding:8px 12px}
+  .sb-foot{flex-direction:row;gap:16px;border-top:none;padding-top:0}
+}
 @media(max-width:760px){
   .topbar,.toolbar{padding-left:16px;padding-right:16px}
   .panel{margin:0 16px}
   .t2{display:none}
+  .sb-title{display:none}
   .grid thead th:nth-child(3),.grid tbody td:nth-child(3),
   .grid thead th:nth-child(6),.grid tbody td:nth-child(6){display:none}
 }

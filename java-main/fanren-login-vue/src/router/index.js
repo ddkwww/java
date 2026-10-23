@@ -5,10 +5,12 @@ import RegisterView from '../views/RegisterView.vue'
 import SutraDetailView from '../views/SutraDetailView.vue'
 import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
+import TreasureDetailView from '../views/TreasureDetailView.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
   { path: '/manual/:id', name: 'manual', component: SutraDetailView, meta: { requiresAuth: true } },
+  { path: '/treasure/:id', name: 'treasure', component: TreasureDetailView, meta: { requiresAuth: true } },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/register', name: 'register', component: RegisterView },
   { path: '/admin/login', name: 'admin-login', component: AdminLoginView },

@@ -234,3 +234,26 @@ export async function deleteManual(id) {
   }
   return { ok: true }
 }
+
+// ===== 功法插画上传 =====
+// 真实后端：multipart POST 到 /api/manuals/upload，返回 { url }；
+// mock 模式（未配置后端）：生成本地预览 URL（不落库，与整体 mock 行为一致）。
+export async function uploadManualImage(file) {
+  if (!BASE) {
+    return { url: URL.createObjectURL(file) }
+  }
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(`${BASE}/api/manuals/upload`, {
+    method: 'POST',
+    headers: { ...authHeader() },
+    body: fd
+  })
+  if (!res.ok) {
+    let msg = '图片上传失败'
+    try { msg = (await res.json()).message || msg } catch (_) {}
+    throw new Error(msg)
+  }
+  const data = await res.json()
+  return { url: data.url }
+}
