@@ -1,12 +1,132 @@
 <template>
   <div class="stage">
     <div class="panel">
-      <LoginVisual />
+        <!-- 左侧：海报视觉区（随所选头像切换专属海报） -->
+        <aside class="poster-side">
+          <div class="poster-layer" :class="{ on: !!currentPoster }">
+            <img v-if="currentPoster" :key="currentPoster" :src="currentPoster" alt="角色海报" draggable="false" />
+            <div v-else class="poster-empty">择男修或女修<br>开启仙缘</div>
+          </div>
+          <div class="poster-mask"></div>
 
+          <div class="poster-caption">
+            <div class="brand"><span class="seal">仙</span> 仙缘阁 · 入门拜帖</div>
+            <h1 class="title">凡人<br>修仙传</h1>
+            <p class="subtitle">
+              {{ gender === '男' ? '男儿何不带吴钩 · 一剑光寒定九州'
+               : gender === '女' ? '仙子凌波御风行 · 回眸人间万里晴'
+               : '凡人亦可逆天改命' }}
+            </p>
+            <div class="realm-chip">当前修为 · {{ realm }}</div>
+          </div>
+
+          <div class="foot">
+            {{ gender ? (avatar ? '道友形象已具 · 请完善根基' : '请择定化身头像') : '择男修或女修 · 可先观仙容' }}
+          </div>
+        </aside>
+
+      <!-- 右侧：人物初始化表单 -->
       <section class="form-side">
         <form class="card" @submit.prevent="onSubmit" autocomplete="off">
           <h2>入门拜帖</h2>
-          <p class="hint">请设立道号与法诀，开启仙缘</p>
+          <p class="hint">开创化身，立道号，证仙缘</p>
+
+          <!-- 化身：头像 + 性别 -->
+          <div class="sec-title"><i></i>化身</div>
+          <div class="avatar-row">
+            <div class="avatar-preview" :style="avatarPreviewStyle">
+              <span v-if="!avatar">未选<br>头像</span>
+            </div>
+            <div class="avatar-picker" :class="{ locked: !gender }">
+              <div v-if="!gender" class="avatar-lock-tip">请先选择性别，方可择定化身</div>
+              <div class="avatar-grid">
+                <button
+                  v-for="key in avatarList" :key="key" type="button"
+                  class="avatar-cell" :class="{ active: avatar === key }"
+                  :disabled="!gender" @click="avatar = key"
+                >
+                  <img :src="AVATAR_IMAGES[key]" alt="默认头像" draggable="false" />
+                </button>
+              </div>
+              <label class="upload" :class="{ active: isUploaded }" :style="gender ? '' : 'pointer-events:none;opacity:.45'">
+                <input type="file" accept="image/*" :disabled="!gender" hidden @change="onUpload" />
+                {{ isUploaded ? '已用上传头像 · 点击更换' : '⇪ 上传自定义头像' }}
+              </label>
+            </div>
+          </div>
+
+          <div class="gender-row">
+            <button type="button" class="gender-card" :class="{ active: gender === '男' }" @click="pickGender('男')">
+              <span class="g-ico">⚔</span><span>男修</span>
+            </button>
+            <button type="button" class="gender-card" :class="{ active: gender === '女' }" @click="pickGender('女')">
+              <span class="g-ico">❀</span><span>女修</span>
+            </button>
+          </div>
+
+          <!-- 根基：修为/年龄/灵根/体质 -->
+          <div class="sec-title"><i></i>根基</div>
+
+          <div class="field readonly">
+            <span class="ico">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+            </span>
+            <input :value="realm" type="text" readonly disabled>
+            <span class="lock" title="系统初始修为，不可修改">锁</span>
+          </div>
+
+          <div class="field">
+            <span class="ico">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="2" width="16" height="20" rx="3"/><path d="M8 6h8M8 10h8M8 14h5"/></svg>
+            </span>
+            <input v-model.number="age" type="number" min="10" max="99" placeholder="年龄（10–99）" required>
+          </div>
+
+          <div class="chips">
+            <button
+              v-for="r in spiritRoots" :key="r" type="button"
+              class="chip" :class="{ active: spiritRoot === r, special: r.includes('变异') }"
+              @click="spiritRoot = r"
+            >{{ r }}</button>
+          </div>
+
+          <div class="field readonly">
+            <span class="ico">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c3 4 6 6 6 10a6 6 0 0 1-12 0c0-4 3-6 6-10z"/></svg>
+            </span>
+            <select v-model="physique" :style="{ color: physiqueColor }" @change="onPhysiqueChange">
+              <option v-for="p in physiques" :key="p.name" :value="p.name" :disabled="p.name !== '凡人之躯'" :style="{ color: p.color }">
+                {{ p.name }}
+              </option>
+            </select>
+            <span class="lock" title="体质由天命而定，凡人之躯不可更改">锁</span>
+          </div>
+
+          <!-- 行囊：初始法宝 / 初始功法 -->
+          <div class="sec-title"><i></i>行囊</div>
+          <div class="duo">
+            <div class="field">
+              <select v-model="initialTreasure" :style="{ color: currentTreasureColor }">
+                <option v-for="t in treasures" :key="t.name" :value="t.name" :style="{ color: GRADE_COLOR[t.grade] }">
+                  法宝 · {{ t.name }}（{{ t.grade }}）
+                </option>
+              </select>
+            </div>
+            <div class="field">
+              <select v-model="initialGongfa" :style="{ color: currentGongfaColor }">
+                <option v-for="g in gongfas" :key="g.name" :value="g.name" :style="{ color: GRADE_COLOR[g.grade] }">
+                  功法 · {{ g.name }}（{{ g.grade }}）
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="grade-hint">
+            <span class="grade-tag" :style="{ color: currentTreasureColor, borderColor: currentTreasureColor }">法宝品阶 · {{ currentTreasure.grade }}</span>
+            <span class="grade-tag" :style="{ color: currentGongfaColor, borderColor: currentGongfaColor }">功法品阶 · {{ currentGongfa.grade }}</span>
+          </div>
+
+          <!-- 道号：账号/密码/验证码 -->
+          <div class="sec-title"><i></i>道号</div>
 
           <div class="field">
             <span class="ico">
@@ -56,16 +176,63 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getCaptcha } from '../api/auth'
-import LoginVisual from '../components/LoginVisual.vue'
+import { AVATAR_IMAGES, defaultAvatars, avatarImage, avatarPoster } from '../assets/avatars'
+import posterMale from '../assets/posters/poster-male.jpg'
+import posterFemale from '../assets/posters/poster-female.jpg'
 import Toast from '../components/Toast.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
 
+// ===== 人物初始化选项（参考游戏捏人模块）=====
+const realm = '练气一层' // 修为：只读，系统初始
+
+// 修仙品阶 → 字体颜色（由凡入圣，逐级升色）
+const GRADE_COLOR = {
+  '凡品': '#9aa4b8',
+  '下品': '#6fcf97',
+  '中品': '#4aa3ff',
+  '上品': '#b48cff',
+  '极品': '#ffae42',
+  '灵宝': '#ff5c7c'
+}
+
+const spiritRoots = ['金灵根', '木灵根', '水灵根', '火灵根', '土灵根', '雷灵根·变异', '冰灵根·变异', '风灵根·变异']
+// 体质：仅「凡人之躯」可择，其余仅供观览天命，不可选
+const physiques = [
+  { name: '凡人之躯', color: '#9aa4b8' },
+  { name: '先天道体', color: '#ffd56b' },
+  { name: '太阴之体', color: '#7fd4ff' },
+  { name: '纯阳之体', color: '#ff7a6b' },
+  { name: '九幽玄阴体', color: '#b48cff' },
+  { name: '风灵体质', color: '#6fcf97' }
+]
+// 初始法宝（标注品阶）
+const treasures = [
+  { name: '青竹蜂云剑', grade: '上品' },
+  { name: '金光砖', grade: '中品' },
+  { name: '昊阳镜', grade: '上品' },
+  { name: '飞云盾', grade: '中品' },
+  { name: '龙渊匕', grade: '下品' },
+  { name: '储物袋', grade: '凡品' },
+  { name: '聚灵幡', grade: '中品' },
+  { name: '赤炎珠', grade: '下品' }
+]
+// 初始功法（标注品阶）
+const gongfas = [
+  { name: '长春功', grade: '下品' },
+  { name: '青元剑诀', grade: '极品' },
+  { name: '大衍诀', grade: '极品' },
+  { name: '明王诀', grade: '上品' },
+  { name: '清风诀', grade: '凡品' },
+  { name: '驱物术', grade: '凡品' }
+]
+
+// ===== 表单状态 =====
 const username = ref('')
 const password = ref('')
 const confirm = ref('')
@@ -74,9 +241,42 @@ const captchaId = ref('')
 const captchaImage = ref('')
 const showPwd = ref(false)
 const loading = ref(false)
+
+const gender = ref('')                       // '' | '男' | '女'
+const avatar = ref('')                       // 'avatar:male-1'…或上传的 dataURL
+const age = ref(null)
+const spiritRoot = ref('')
+const physique = ref(physiques[0].name)
+const initialTreasure = ref(treasures[0].name)
+const initialGongfa = ref(gongfas[0].name)
+
 const toastMsg = ref('')
 const toastVisible = ref(false)
 let toastTimer = 0
+
+// 头像：已选性别时只展示对应性别默认头像，否则展示全部
+const avatarList = computed(() => (gender.value ? defaultAvatars(gender.value) : Object.keys(AVATAR_IMAGES)))
+const isUploaded = computed(() => avatar.value.startsWith('data:'))
+const avatarPreviewStyle = computed(() => {
+  const url = avatarImage(avatar.value)
+  return url ? { backgroundImage: `url(${url})` } : {}
+})
+
+// 左侧海报：优先显示已选头像的专属海报；未选头像时回退性别默认海报；未选性别则为空
+const currentPoster = computed(() => {
+  const p = avatarPoster(avatar.value)
+  if (p) return p
+  if (gender.value === '女') return posterFemale
+  if (gender.value === '男') return posterMale
+  return null
+})
+
+// 当前法宝/功法/体质的展示色与品阶（驱动下拉字色与标签）
+const currentTreasure = computed(() => treasures.find(t => t.name === initialTreasure.value) || treasures[0])
+const currentTreasureColor = computed(() => GRADE_COLOR[currentTreasure.value.grade])
+const currentGongfa = computed(() => gongfas.find(g => g.name === initialGongfa.value) || gongfas[0])
+const currentGongfaColor = computed(() => GRADE_COLOR[currentGongfa.value.grade])
+const physiqueColor = computed(() => (physiques.find(p => p.name === physique.value) || physiques[0]).color)
 
 onMounted(() => {
   const saved = localStorage.getItem('fx_user')
@@ -101,7 +301,53 @@ async function refreshCaptcha() {
   }
 }
 
+// 选择性别：同步左侧海报；强制「先性别后头像」——切换性别时清空不属于该性别的已选头像
+function pickGender(g) {
+  gender.value = g
+  if (!isUploaded.value && avatar.value && !defaultAvatars(g).includes(avatar.value)) {
+    avatar.value = ''
+  }
+}
+
+// 体质：仅「凡人之躯」可择，强行择他者即时复位
+function onPhysiqueChange() {
+  if (physique.value !== '凡人之躯') physique.value = '凡人之躯'
+}
+
+// 上传头像：本地压缩为 128×128 JPEG dataURL（避免超大图入库）
+function onUpload(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  if (!/^image\//.test(file.type)) return show('请选择图片文件')
+  const reader = new FileReader()
+  reader.onload = () => {
+    const img = new Image()
+    img.onload = () => {
+      const size = 128
+      const canvas = document.createElement('canvas')
+      canvas.width = size
+      canvas.height = size
+      const ctx = canvas.getContext('2d')
+      const scale = Math.max(size / img.width, size / img.height)
+      const w = img.width * scale
+      const h = img.height * scale
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h)
+      avatar.value = canvas.toDataURL('image/jpeg', 0.85)
+      show('头像已就位')
+    }
+    img.onerror = () => show('图片读取失败，请换一张')
+    img.src = reader.result
+  }
+  reader.readAsDataURL(file)
+  e.target.value = ''
+}
+
 async function onSubmit() {
+  if (!gender.value) return show('请先择定男修或女修')
+  if (!avatar.value) return show('请选择或上传头像')
+  const n = Number(age.value)
+  if (!n || n < 10 || n > 99) return show('年龄需在 10–99 之间')
+  if (!spiritRoot.value) return show('请择定灵根')
   if (!username.value.trim()) return show('请填写道号')
   if (!password.value) return show('请填写法诀')
   if (password.value.length < 5 || password.value.length > 15) {
@@ -109,9 +355,18 @@ async function onSubmit() {
   }
   if (password.value !== confirm.value) return show('两遍法诀不一致')
   if (!captcha.value.trim()) return show('请填写御阵符')
+
   loading.value = true
   try {
-    await auth.register(username.value.trim(), password.value, captchaId.value, captcha.value.trim())
+    await auth.register(username.value.trim(), password.value, captchaId.value, captcha.value.trim(), {
+      gender: gender.value,
+      age: n,
+      spiritRoot: spiritRoot.value,
+      physique: physique.value,
+      avatar: avatar.value,
+      initialTreasure: initialTreasure.value,
+      initialGongfa: initialGongfa.value
+    })
     show('入门已成 · 请以此道号登录')
     setTimeout(() => router.push('/login'), 1200)
   } catch (e) {
@@ -130,37 +385,176 @@ onUnmounted(() => clearTimeout(toastTimer))
   position:relative;z-index:2;
   height:100%;width:100%;
   display:flex;align-items:center;justify-content:center;
-  padding:24px;
+  padding:20px;
 }
 .panel{
-  display:flex;width:min(960px,94vw);height:min(620px,90vh);
+  display:flex;width:min(1120px,96vw);height:min(760px,94vh);
   border-radius:22px;overflow:hidden;
   border:1px solid var(--line);
   box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(233,200,120,.05) inset;
   backdrop-filter:blur(6px);
 }
-.form-side{
-  flex:1;min-width:300px;display:grid;place-items:center;padding:36px;
-  background:linear-gradient(180deg,rgba(20,29,54,.55),rgba(7,10,20,.65));
-  position:relative;
+
+/* ===== 左侧海报区 ===== */
+.poster-side{
+  position:relative;flex:none;width:38%;min-width:300px;
+  display:flex;flex-direction:column;justify-content:space-between;
+  overflow:hidden;background:#070a14;
 }
-.card{width:100%;max-width:330px;animation:rise .9s cubic-bezier(.2,.8,.2,1) both}
+.poster-layer{position:absolute;inset:0;opacity:0;transition:opacity .7s ease}
+.poster-layer.on{opacity:1}
+.poster-layer img{width:100%;height:100%;object-fit:cover;display:block}
+.poster-mask{
+  position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(90deg,rgba(7,10,20,.25),rgba(7,10,20,.75) 88%),
+    linear-gradient(0deg,rgba(7,10,20,.9),transparent 55%);
+}
+.poster-caption{position:relative;z-index:1;padding:38px 34px;display:flex;flex-direction:column;gap:0}
+.poster-caption .brand{display:flex;align-items:center;gap:10px;font-size:13px;letter-spacing:3px;color:var(--gold)}
+.poster-caption .brand .seal{
+  width:30px;height:30px;border-radius:7px;display:grid;place-items:center;
+  background:linear-gradient(145deg,var(--gold),#b88a3c);color:#1a1206;font-weight:700;
+  box-shadow:0 0 18px rgba(233,200,120,.45);
+}
+.poster-caption .title{
+  font-size:clamp(34px,4.2vw,52px);font-weight:700;line-height:1.08;
+  letter-spacing:6px;margin-top:10px;
+  background:linear-gradient(180deg,#fff7e6,var(--gold) 55%,#b98e34);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:0 0 40px rgba(233,200,120,.25);
+}
+.poster-caption .subtitle{color:var(--ink-dim);letter-spacing:3px;margin-top:12px;font-size:13px}
+.realm-chip{
+  margin-top:18px;align-self:flex-start;
+  font-size:12.5px;letter-spacing:2px;padding:7px 14px;border-radius:999px;
+  border:1px solid rgba(233,200,120,.4);color:var(--gold);
+  background:rgba(233,200,120,.08);box-shadow:0 0 16px rgba(233,200,120,.2);
+}
+.poster-side .foot{position:relative;z-index:1;padding:0 34px 30px;color:var(--ink-dim);font-size:12px;letter-spacing:2px;opacity:.75}
+.poster-empty{
+  position:absolute;inset:0;display:grid;place-items:center;text-align:center;
+  color:var(--ink-dim);font-size:15px;letter-spacing:4px;line-height:2;opacity:.7;
+}
+
+/* ===== 右侧表单区 ===== */
+.form-side{
+  flex:1;min-width:0;position:relative;
+  overflow-y:auto;
+  background:linear-gradient(180deg,rgba(20,29,54,.55),rgba(7,10,20,.65));
+  padding:34px 40px 30px;
+}
+.form-side::-webkit-scrollbar{width:8px}
+.form-side::-webkit-scrollbar-thumb{background:rgba(140,170,220,.25);border-radius:4px}
+.card{width:100%;max-width:560px;margin:0 auto;animation:rise .9s cubic-bezier(.2,.8,.2,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
-.card h2{font-size:30px;letter-spacing:6px;margin-bottom:6px;
+.card h2{font-size:28px;letter-spacing:6px;margin-bottom:6px;
   background:linear-gradient(180deg,#fff,var(--qi));-webkit-background-clip:text;background-clip:text;color:transparent}
-.card .hint{color:var(--ink-dim);font-size:13px;letter-spacing:2px;margin-bottom:26px}
+.card .hint{color:var(--ink-dim);font-size:13px;letter-spacing:2px;margin-bottom:20px}
+
+/* 分节标题 */
+.sec-title{
+  display:flex;align-items:center;gap:10px;
+  margin:22px 0 14px;color:var(--gold);font-size:14px;letter-spacing:4px;font-weight:700;
+}
+.sec-title i{width:22px;height:1px;background:linear-gradient(90deg,var(--gold),transparent)}
+.sec-title:first-of-type{margin-top:4px}
+
+/* 头像选择 */
+.avatar-row{display:flex;gap:18px;align-items:flex-start}
+.avatar-preview{
+  width:84px;height:84px;flex:none;border-radius:50%;
+  border:1px solid var(--line);background:rgba(255,255,255,.03) center/cover no-repeat;
+  display:grid;place-items:center;text-align:center;
+  font-size:12px;color:var(--ink-dim);letter-spacing:2px;line-height:1.7;
+  box-shadow:0 0 0 4px rgba(233,200,120,.08),0 8px 24px rgba(0,0,0,.4);
+}
+.avatar-picker{flex:1;min-width:0}
+.avatar-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;transition:opacity .25s}
+.avatar-picker.locked .avatar-grid{opacity:.4;pointer-events:none;filter:grayscale(.6)}
+.avatar-lock-tip{
+  font-size:13px;letter-spacing:2px;color:var(--ink-dim);text-align:center;
+  padding:14px;border:1px dashed var(--line);border-radius:12px;margin-bottom:12px;
+  background:rgba(255,255,255,.02);
+}
+.avatar-cell{
+  aspect-ratio:1;border-radius:50%;padding:0;cursor:pointer;overflow:hidden;
+  border:2px solid var(--line);background:transparent;transition:.2s;
+}
+.avatar-cell img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar-cell:hover{border-color:rgba(103,232,249,.5)}
+.avatar-cell.active{border-color:var(--gold);box-shadow:0 0 16px rgba(233,200,120,.45)}
+.upload{
+  display:block;margin-top:10px;text-align:center;cursor:pointer;
+  padding:8px 12px;border-radius:10px;font-size:12.5px;letter-spacing:2px;
+  color:var(--ink-dim);border:1px dashed var(--line);transition:.2s;
+}
+.upload:hover{color:var(--qi);border-color:rgba(103,232,249,.5)}
+.upload.active{color:var(--gold);border-color:rgba(233,200,120,.5);border-style:solid;background:rgba(233,200,120,.06)}
+
+/* 性别 */
+.gender-row{display:flex;gap:14px;margin-top:16px}
+.gender-card{
+  flex:1;padding:13px 10px;border-radius:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  font-family:inherit;font-size:16px;letter-spacing:6px;color:var(--ink-dim);
+  border:1px solid var(--line);background:rgba(255,255,255,.03);transition:.25s;
+}
+.gender-card .g-ico{font-size:18px}
+.gender-card:hover{border-color:rgba(103,232,249,.5);color:var(--ink)}
+.gender-card.active{
+  color:var(--gold);border-color:rgba(233,200,120,.6);
+  background:rgba(233,200,120,.08);box-shadow:0 0 18px rgba(233,200,120,.25);
+}
+
+/* 灵根 chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.chip{
+  padding:8px 13px;border-radius:999px;cursor:pointer;
+  font-family:inherit;font-size:13px;letter-spacing:1px;color:var(--ink-dim);
+  border:1px solid var(--line);background:rgba(255,255,255,.02);transition:.2s;
+}
+.chip:hover{color:var(--ink);border-color:rgba(103,232,249,.5)}
+.chip.active{color:var(--qi);border-color:rgba(103,232,249,.6);background:rgba(103,232,249,.08);box-shadow:0 0 14px rgba(103,232,249,.2)}
+.chip.special{border-style:dashed}
+.chip.special.active{color:var(--violet);border-color:rgba(139,109,255,.6);background:rgba(139,109,255,.08);box-shadow:0 0 14px rgba(139,109,255,.25)}
+
+/* 双列下拉 */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* 品阶标签 */
+.grade-hint{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 4px}
+.grade-tag{
+  font-size:12px;letter-spacing:2px;padding:5px 12px;border-radius:999px;
+  border:1px solid var(--line);background:rgba(255,255,255,.03);
+  transition:color .25s,border-color .25s;
+}
+
+/* 输入域（沿用原风格） */
 .field{position:relative;margin-bottom:18px}
-.field .ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--ink-dim)}
-.field input{
+.field .ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--ink-dim);pointer-events:none}
+.field input,.field select{
   width:100%;padding:14px 14px 14px 44px;font-size:15px;color:var(--ink);
   background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;
   outline:none;transition:.25s;font-family:inherit;letter-spacing:1px;
+  appearance:none;
 }
+.field select{cursor:pointer}
+.field select option{background:#0d1426;color:var(--ink)}
 .field input::placeholder{color:#5e6f93}
-.field input:focus{
+.field input:focus,.field select:focus{
   border-color:rgba(103,232,249,.6);
   box-shadow:0 0 0 3px rgba(103,232,249,.12),0 0 22px rgba(103,232,249,.18);
   background:rgba(103,232,249,.05);
+}
+.field.readonly input,.field.readonly select{
+  color:var(--gold);cursor:not-allowed;
+  background:rgba(233,200,120,.05);border-color:rgba(233,200,120,.3);
+}
+.field .lock{
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  font-size:11px;letter-spacing:2px;padding:3px 8px;border-radius:6px;
+  color:var(--ink-dim);border:1px solid var(--line);cursor:help;user-select:none;
 }
 .field .toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--ink-dim);user-select:none}
 .field .toggle:hover{color:var(--qi)}
@@ -191,8 +585,12 @@ onUnmounted(() => clearTimeout(toastTimer))
 .alt a{color:var(--qi);text-decoration:none}
 .alt a:hover{text-shadow:0 0 12px rgba(103,232,249,.5)}
 
-@media(max-width:760px){
-  .panel{flex-direction:column;height:auto}
-  .form-side{padding:30px}
+@media(max-width:920px){
+  .panel{flex-direction:column;height:auto;max-height:none}
+  .poster-side{width:100%;min-height:230px}
+  .poster-caption{padding:24px 24px 18px}
+  .poster-side .foot{padding:0 24px 18px}
+  .form-side{overflow:visible;padding:28px 24px}
+  .duo{grid-template-columns:1fr}
 }
 </style>

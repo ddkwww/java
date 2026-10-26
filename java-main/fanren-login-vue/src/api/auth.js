@@ -7,8 +7,9 @@
 // POST /api/register  body: { username, password, captchaId, captcha }
 //                      成功 200 { token, username }；失败 409 已存在 / 400 验证码错误或密码不符合规范
 //                      密码长度（5–15 位）由后端强制校验
-// POST /api/login     body: { username, password } → 200 { token, username }
-// GET  /api/me        Header Authorization: Bearer <token> → 200 { username, realm, level }
+// POST /api/login     body: { username, password } → 200 { token, username, permission }
+// POST /api/admin/login body: { username, password } → 仅 permission=0 可成功，否则 403
+// GET  /api/me        Header Authorization: Bearer <token> → 200 { username, realm, level, permission }
 // POST /api/logout    Header Authorization: Bearer <token> → 200 { ok:true }
 const BASE = import.meta.env.VITE_API_BASE || ''
 
@@ -93,13 +94,27 @@ export async function getCaptcha() {
 export async function login(username, password) {
   if (!BASE) {
     await delay(1400)
-    return { token: 'fx_' + Math.random().toString(36).slice(2, 12), username }
+    return { token: 'fx_' + Math.random().toString(36).slice(2, 12), username, permission: 1 }
   }
   return request('/api/login', { method: 'POST', body: JSON.stringify({ username, password }) })
 }
 
+// 后台管理员登录：仅 permission=0 可成功，否则后端返回 403
+export async function adminLogin(username, password) {
+  if (!BASE) {
+    await delay(1400)
+    // 本地模拟：仅 admin / admin123 视为管理员
+    if (username === 'admin' && password === 'admin123') {
+      return { token: 'fx_' + Math.random().toString(36).slice(2, 12), username, permission: 0 }
+    }
+    throw new Error('权限不足，仅管理员可登录后台')
+  }
+  return request('/api/admin/login', { method: 'POST', body: JSON.stringify({ username, password }) })
+}
+
 // 注册：新增密码长度校验（5–15）与验证码校验；真实后端走 /api/register
-export async function register(username, password, captchaId, captcha) {
+// profile 为人物初始化资料：{ gender, age, spiritRoot, physique, avatar, initialTreasure, initialGongfa }
+export async function register(username, password, captchaId, captcha, profile = {}) {
   if (!BASE) {
     await delay(1400)
     if (!username || !username.trim()) throw new Error('请填写道号')
@@ -113,7 +128,19 @@ export async function register(username, password, captchaId, captcha) {
   }
   return request('/api/register', {
     method: 'POST',
-    body: JSON.stringify({ username, password, captchaId, captcha })
+    body: JSON.stringify({
+      username,
+      password,
+      captchaId,
+      captcha,
+      gender: profile.gender,
+      age: profile.age,
+      spiritRoot: profile.spiritRoot,
+      physique: profile.physique,
+      avatar: profile.avatar,
+      initialTreasure: profile.initialTreasure,
+      initialGongfa: profile.initialGongfa
+    })
   })
 }
 

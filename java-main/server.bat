@@ -94,19 +94,28 @@ if not defined NPM (
 echo   使用 npm: %NPM%
 
 :: 进入前端目录，依赖缺失则安装
+:: 注意：仅判断 node_modules 目录不够，必须确认 vite 入口存在，
+::       否则依赖装一半时 npm run dev 会瞬间退出导致“闪退”
 pushd "%FRONTEND_DIR%"
-if not exist "node_modules" (
-  echo   前端依赖缺失，正在安装（npmmirror 镜像）...
+if not exist "node_modules\.bin\vite.cmd" (
+  echo   前端依赖缺失（缺少 vite），正在安装（npmmirror 镜像）...
   "%NPM%" install --registry=https://registry.npmmirror.com
+  if not exist "node_modules\.bin\vite.cmd" (
+    echo [错误] 依赖安装失败，请检查网络连接或 npm registry 配置。
+    popd
+    pause
+    exit /b 1
+  )
 )
-start "%FRONTEND_TITLE%" cmd /c "%NPM%" run dev
+:: 用 cmd /k 保持窗口：即使启动失败也能看到报错，避免一闪而过
+start "%FRONTEND_TITLE%" cmd /k call "%NPM%" run dev
 popd
 echo   前端启动命令已下发
 
 echo.
 echo ============ 启动完成 ============
-echo 后端访问： http://localhost:%BACKEND_PORT%
-echo 前端访问： http://localhost:%FRONTEND_PORT%
+echo 后端访问： http://192.168.68.100:%BACKEND_PORT%
+echo 前端访问： http://192.168.68.100:%FRONTEND_PORT%
 echo 停止服务：双击 stop.bat，或关闭上面两个黑色命令行窗口。
 echo ====================================
 pause

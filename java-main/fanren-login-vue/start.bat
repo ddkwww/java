@@ -49,13 +49,13 @@ if not exist "node_modules\.bin\vite.cmd" (
 
 :: ---------- 启动开发服务器：用 cmd /k 保持窗口，启动失败也能看到报错 ----------
 echo 正在启动「凡人修仙传」登录页...
-echo 访问地址： http://localhost:5173
+echo 访问地址： http://192.168.68.100:5173
 start "fanren-login-vue" cmd /k call "%NPM%" run dev
 
 :: 轮询等待服务就绪（最多约 15 秒）后再打开浏览器，避免过早打开空白页
 set "READY=0"
 for /L %%i in (1,1,15) do (
-  powershell -NoProfile -Command "try{(Invoke-WebRequest -Uri 'http://localhost:5173' -UseBasicParsing -TimeoutSec 1).StatusCode;exit 0}catch{exit 1}" >nul 2>nul
+  powershell -NoProfile -Command "try{(Invoke-WebRequest -Uri 'http://192.168.68.100:5173' -UseBasicParsing -TimeoutSec 1).StatusCode;exit 0}catch{exit 1}" >nul 2>nul
   if not errorlevel 1 (
     set "READY=1"
     goto :open
@@ -64,7 +64,7 @@ for /L %%i in (1,1,15) do (
 )
 :open
 timeout /t 1 /nobreak >nul
-start "" http://localhost:5173/
+start "" http://192.168.68.100:5173/
 
 echo.
 echo 前端已在独立窗口启动；若该窗口报错且未自动关闭，请截图反馈。

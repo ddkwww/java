@@ -5,7 +5,7 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 全局 CORS：放行前端 Vite 开发服务器（默认 http://localhost:5173）的跨域请求。
+ * 全局 CORS：放行前端 Vite 开发服务器（LAN 访问示例 http://192.168.68.100:5173）的跨域请求。
  * 前端注册请求带 credentials: 'include'，因此必须 allowCredentials(true)，
  * 且不能用 "*" 作为 origin，这里用 allowedOriginPatterns("*") 兼容本地多端口。
  */

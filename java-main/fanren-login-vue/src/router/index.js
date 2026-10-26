@@ -22,13 +22,18 @@ const router = createRouter({
   routes
 })
 
-// 未登录拦截；已登录访问登录页则跳首页/后台
+// 未登录拦截；已登录访问登录页则跳首页/后台；非管理员不得进入后台
 router.beforeEach((to) => {
   const token = localStorage.getItem('fx_token')
+  const perm = localStorage.getItem('fx_permission')
+  // 受保护路由未登录 → 跳登录页（后台相关跳后台登录页）
   if (to.meta.requiresAuth && !token) {
-    // 后台管理相关路由未登录 → 跳后台登录页；其余 → 普通登录页
     const target = to.path.startsWith('/admin') ? 'admin-login' : 'login'
     return { name: target, query: { redirect: to.fullPath } }
+  }
+  // 已登录但非管理员(permission!=0)访问任何 /admin 页面 → 回首页
+  if (to.path.startsWith('/admin') && token && perm !== '0') {
+    return { name: 'home' }
   }
   if (to.name === 'login' && token) return { name: 'home' }
   if (to.name === 'admin-login' && token) return { name: 'admin' }

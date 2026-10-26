@@ -12,7 +12,6 @@
       <nav class="sb-nav">
         <button class="sb-item" :class="{ active: tab === 'manual' }" type="button" @click="tab = 'manual'">功法列表</button>
         <button class="sb-item" :class="{ active: tab === 'treasure' }" type="button" @click="tab = 'treasure'">法宝列表</button>
-        <button class="sb-item" type="button" @click="openCreate">＋ 新增{{ tab === 'manual' ? '功法' : '法宝' }}</button>
         <router-link to="/" class="sb-item">返回首页</router-link>
         <button class="sb-item logout" type="button" @click="onLogout">退出登录</button>
       </nav>
@@ -240,7 +239,14 @@ function onLogout() {
   router.push('/admin/login')
 }
 
-onMounted(load)
+onMounted(() => {
+  // 兜底：非管理员(permission!=0)不得停留后台，直接回首页
+  if (auth.permission !== 0) {
+    router.replace('/')
+    return
+  }
+  load()
+})
 onUnmounted(() => clearTimeout(toastTimer))
 </script>
 

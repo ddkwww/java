@@ -15,8 +15,8 @@
           <a :class="{ active: activeNav === 'dao' }" @click.prevent="scrollTo('dao')">论道</a>
         </nav>
 
-        <!-- 后台管理系统入口 -->
-        <a class="nav-admin" @click.prevent="goAdmin">后台管理系统</a>
+        <!-- 后台管理系统入口：仅管理员(permission=0)可见 -->
+        <a v-if="auth.permission === 0" class="nav-admin" @click.prevent="goAdmin">后台管理系统</a>
 
         <div class="user-box">
           <span class="user-chip" @click="scrollTo('cave')">

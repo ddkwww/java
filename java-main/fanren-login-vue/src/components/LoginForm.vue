@@ -50,7 +50,8 @@ const props = defineProps({
   subtitle: { type: String, default: '请输入道号与法诀，以证仙缘' },
   submitText: { type: String, default: '登 仙' },
   showRegister: { type: Boolean, default: true },
-  redirect: { type: String, default: '/' }
+  redirect: { type: String, default: '/' },
+  admin: { type: Boolean, default: false } // true 时走后台管理员登录接口（仅 permission=0 可成功）
 })
 
 const username = ref('')
@@ -86,7 +87,11 @@ async function onSubmit() {
   }
   loading.value = true
   try {
-    await auth.login(username.value.trim(), password.value, { remember: remember.value })
+    if (props.admin) {
+      await auth.adminLogin(username.value.trim(), password.value, { remember: remember.value })
+    } else {
+      await auth.login(username.value.trim(), password.value, { remember: remember.value })
+    }
     show('仙缘已证 · 欢迎归来，' + username.value.trim())
     setTimeout(() => router.push(props.redirect), 600)
   } catch (e) {
