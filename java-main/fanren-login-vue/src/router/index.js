@@ -6,11 +6,15 @@ import SutraDetailView from '../views/SutraDetailView.vue'
 import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
 import TreasureDetailView from '../views/TreasureDetailView.vue'
+import CollectionView from '../views/CollectionView.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
   { path: '/manual/:id', name: 'manual', component: SutraDetailView, meta: { requiresAuth: true } },
   { path: '/treasure/:id', name: 'treasure', component: TreasureDetailView, meta: { requiresAuth: true } },
+  // 藏经阁 / 法宝阁：独立页面（由同一 CollectionView 按 meta.type 区分）
+  { path: '/sutras', name: 'sutras', component: CollectionView, meta: { requiresAuth: true, type: 'manual' } },
+  { path: '/treasures', name: 'treasures', component: CollectionView, meta: { requiresAuth: true, type: 'treasure' } },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/register', name: 'register', component: RegisterView },
   { path: '/admin/login', name: 'admin-login', component: AdminLoginView },

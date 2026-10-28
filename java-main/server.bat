@@ -98,14 +98,24 @@ echo   使用 npm: %NPM%
 ::       否则依赖装一半时 npm run dev 会瞬间退出导致“闪退”
 pushd "%FRONTEND_DIR%"
 if not exist "node_modules\.bin\vite.cmd" (
-  echo   前端依赖缺失（缺少 vite），正在安装（npmmirror 镜像）...
-  "%NPM%" install --registry=https://registry.npmmirror.com
+  echo   前端依赖缺失/残缺（缺少 vite 入口），准备重装...
+  :: 关键：先彻底清除残缺的 node_modules，避免 npm 在半成品上增量修复再次卡死
+  if exist "node_modules" (
+    echo   检测到已有 node_modules（可能残缺），先清理...
+    rmdir /s /q node_modules
+  )
+  :: --prefer-offline 优先用本地缓存（已命中 vite/esbuild），几乎不联网、秒级完成
+  :: --no-audit --no-fund 关闭额外网络请求；--loglevel=http 显示进度，避免误判卡死
+  echo   正在安装依赖（npmmirror 镜像 + 离线优先）...
+  "%NPM%" install --prefer-offline --no-audit --no-fund --loglevel=http --cache "%~dp0.npm-cache" --registry=https://registry.npmmirror.com
   if not exist "node_modules\.bin\vite.cmd" (
     echo [错误] 依赖安装失败，请检查网络连接或 npm registry 配置。
+    echo [提示] 可将项目目录加入 Windows Defender 排除项，能大幅加速 node_modules 写入，避免卡顿。
     popd
     pause
     exit /b 1
   )
+  echo   依赖安装完成，vite 入口已生成。
 )
 :: 用 cmd /k 保持窗口：即使启动失败也能看到报错，避免一闪而过
 start "%FRONTEND_TITLE%" cmd /k call "%NPM%" run dev

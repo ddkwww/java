@@ -38,10 +38,19 @@ echo 使用 node/npm： %NPM_RESOLVED%
 :: ---------- 依赖检测：仅 node_modules 目录不够，必须 vite 入口存在 ----------
 :: （旧脚本只判断 node_modules 目录，依赖不完整时 vite 缺失会导致启动窗口“闪退”）
 if not exist "node_modules\.bin\vite.cmd" (
-  echo 检测到前端依赖不完整（缺少 vite），正在自动安装（npmmirror 镜像）...
-  "%NPM%" install --registry=https://registry.npmmirror.com
+  echo 检测到前端依赖不完整/残缺（缺少 vite 入口），准备重装...
+  :: 关键：先彻底清除残缺的 node_modules，避免 npm 在半成品上增量修复再次卡死
+  if exist "node_modules" (
+    echo   已有 node_modules 可能残缺，先清理...
+    rmdir /s /q node_modules
+  )
+  :: --prefer-offline 优先用本地缓存（已命中 vite/esbuild），几乎不联网、秒级完成
+  :: --no-audit --no-fund 关闭额外网络请求；--loglevel=http 显示进度，避免误判卡死
+  echo 正在自动安装依赖（npmmirror 镜像 + 离线优先）...
+  "%NPM%" install --prefer-offline --no-audit --no-fund --loglevel=http --registry=https://registry.npmmirror.com
   if not exist "node_modules\.bin\vite.cmd" (
     echo [错误] 依赖安装失败，请检查网络连接或 npm registry 配置。
+    echo [提示] 可将项目目录加入 Windows Defender 排除项，加速 node_modules 写入。
     pause
     goto :eof
   )

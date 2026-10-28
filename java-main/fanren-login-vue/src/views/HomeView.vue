@@ -9,8 +9,8 @@
           <span class="brand-name">凡人修仙 · 藏经阁</span>
         </div>
         <nav class="nav-links">
-          <a :class="{ active: activeNav === 'repository' }" @click.prevent="scrollTo('repository')">藏经阁</a>
-          <a :class="{ active: activeNav === 'treasure' }" @click.prevent="scrollTo('treasure')">法宝</a>
+          <a @click.prevent="goSutras">藏经阁</a>
+          <a @click.prevent="goTreasures">法宝</a>
           <a :class="{ active: activeNav === 'cave' }" @click.prevent="scrollTo('cave')">洞府</a>
           <a :class="{ active: activeNav === 'dao' }" @click.prevent="scrollTo('dao')">论道</a>
         </nav>
@@ -47,174 +47,6 @@
           <span class="hot-label">热门：</span>
           <a v-for="k in hotKeys" :key="k" @click.prevent="quickSearch(k)">{{ k }}</a>
         </div>
-
-        <p v-if="sourceNote" class="source-note">{{ sourceNote }}</p>
-      </section>
-
-      <!-- ===== 藏经阁（功法秘籍总录） ===== -->
-      <section class="block" id="repository">
-        <h2 class="block-title"><i class="orn"></i>藏经阁 · 功法秘籍总录<i class="orn r"></i></h2>
-
-        <!-- 筛选器：分类 / 品阶 / 境界 -->
-        <div class="filters">
-          <div class="filter-row">
-            <span class="filter-label">分类</span>
-            <div class="chips">
-              <button
-                v-for="c in ['全部', ...facets.categories]"
-                :key="c"
-                :class="['chip', { active: activeCategory === c }]"
-                @click="activeCategory = c"
-              >{{ c }}</button>
-            </div>
-          </div>
-
-          <div class="filter-row">
-            <span class="filter-label">品阶</span>
-            <div class="chips">
-              <button
-                v-for="g in ['全部', ...facets.grades]"
-                :key="g"
-                :class="['chip', 'grade-' + g, { active: activeGrade === g }]"
-                @click="activeGrade = g"
-              >{{ g === '全部' ? '全部' : g + '阶' }}</button>
-            </div>
-          </div>
-
-          <div class="filter-row">
-            <span class="filter-label">境界</span>
-            <select class="realm-select" v-model="activeRealm">
-              <option value="全部">全部境界</option>
-              <option v-for="r in facets.realms" :key="r" :value="r">{{ r }}</option>
-            </select>
-            <span class="count">共 {{ items.length }} 卷</span>
-          </div>
-        </div>
-
-        <!-- 秘籍卡片网格 -->
-        <div v-if="items.length" class="grid">
-          <article
-            v-for="(it, i) in items"
-            :key="searchStamp + '-' + it.id"
-            class="item"
-            :data-grade="it.grade"
-            :style="{ animationDelay: (i * 45) + 'ms' }"
-            role="button"
-            tabindex="0"
-            @click="goDetail(it.id)"
-            @keyup.enter="goDetail(it.id)"
-          >
-            <i class="corner" aria-hidden="true"></i>
-            <span class="enter-hint" aria-hidden="true">细览 ›</span>
-            <div class="item-cover" :class="{ 'no-img': !coverOf(it) }">
-              <img
-                v-if="coverOf(it)"
-                :src="coverOf(it)"
-                :alt="it.name"
-                :title="it.name + ' · 秘籍插画'"
-                loading="lazy"
-              />
-              <span v-else class="cover-fallback" aria-hidden="true">{{ it.category.slice(0, 2) }}</span>
-              <span class="cover-grad" aria-hidden="true"></span>
-            </div>
-            <div class="item-head">
-              <span class="grade">{{ it.grade }}阶</span>
-              <span class="type">{{ it.category }}</span>
-              <span class="realm-tag">{{ it.realm }}</span>
-            </div>
-            <h3 class="item-name">{{ it.name }}</h3>
-            <p class="item-desc">{{ it.desc }}</p>
-            <p class="item-origin">出处 · {{ it.origin }}</p>
-          </article>
-        </div>
-        <div v-else class="empty">
-          <div class="cloud" aria-hidden="true">﹀﹀﹀</div>
-          <p>藏经阁中未见此典。</p>
-          <p class="empty-hint">道友可调整筛选，或换个名目寻索。</p>
-        </div>
-      </section>
-
-      <!-- ===== 法宝阁（珍奇宝物总录） ===== -->
-      <section class="block" id="treasure">
-        <h2 class="block-title"><i class="orn"></i>法宝阁 · 珍奇宝物总录<i class="orn r"></i></h2>
-
-        <!-- 筛选器：类别 / 品阶 / 境界 -->
-        <div class="filters">
-          <div class="filter-row">
-            <span class="filter-label">类别</span>
-            <div class="chips">
-              <button
-                v-for="c in ['全部', ...treasureFacets.categories]"
-                :key="c"
-                :class="['chip', { active: activeTCategory === c }]"
-                @click="activeTCategory = c"
-              >{{ c }}</button>
-            </div>
-          </div>
-
-          <div class="filter-row">
-            <span class="filter-label">品阶</span>
-            <div class="chips">
-              <button
-                v-for="g in ['全部', ...treasureFacets.grades]"
-                :key="g"
-                :class="['chip', 'grade-' + g, { active: activeTGrade === g }]"
-                @click="activeTGrade = g"
-              >{{ g === '全部' ? '全部' : g + '阶' }}</button>
-            </div>
-          </div>
-
-          <div class="filter-row">
-            <span class="filter-label">境界</span>
-            <select class="realm-select" v-model="activeTRealm">
-              <option value="全部">全部境界</option>
-              <option v-for="r in treasureFacets.realms" :key="r" :value="r">{{ r }}</option>
-            </select>
-            <span class="count">共 {{ treasureItems.length }} 件</span>
-          </div>
-        </div>
-
-        <!-- 法宝卡片网格 -->
-        <div v-if="treasureItems.length" class="grid">
-          <article
-            v-for="(it, i) in treasureItems"
-            :key="tSearchStamp + '-' + it.id"
-            class="item"
-            :data-grade="it.grade"
-            :style="{ animationDelay: (i * 45) + 'ms' }"
-            role="button"
-            tabindex="0"
-            @click="goTreasureDetail(it.id)"
-            @keyup.enter="goTreasureDetail(it.id)"
-          >
-            <i class="corner" aria-hidden="true"></i>
-            <span class="enter-hint" aria-hidden="true">细览 ›</span>
-            <div class="item-cover" :class="{ 'no-img': !tCoverOf(it) }">
-              <img
-                v-if="tCoverOf(it)"
-                :src="tCoverOf(it)"
-                :alt="it.name"
-                :title="it.name + ' · 法宝插画'"
-                loading="lazy"
-              />
-              <span v-else class="cover-fallback" aria-hidden="true">{{ it.category.slice(0, 2) }}</span>
-              <span class="cover-grad" aria-hidden="true"></span>
-            </div>
-            <div class="item-head">
-              <span class="grade">{{ it.grade }}阶</span>
-              <span class="type">{{ it.category }}</span>
-              <span class="realm-tag">{{ it.realm }}</span>
-            </div>
-            <h3 class="item-name">{{ it.name }}</h3>
-            <p class="item-desc">{{ it.desc }}</p>
-            <p class="item-origin">出处 · {{ it.origin }}</p>
-          </article>
-        </div>
-        <div v-else class="empty">
-          <div class="cloud" aria-hidden="true">﹀﹀﹀</div>
-          <p>法宝阁中未见此宝。</p>
-          <p class="empty-hint">道友可调整筛选，或换个名目寻索。</p>
-        </div>
       </section>
 
       <!-- ===== 洞府（道友信息） ===== -->
@@ -242,64 +74,24 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { fetchManuals, fetchFacets } from '../api/sutra'
-import { fetchTreasures, fetchTreasureFacets } from '../api/treasure'
-import { manualImage } from '../assets/manuals'
 
 const auth = useAuthStore()
 const router = useRouter()
 
 const keyword = ref('')
-const items = ref([])
-const facets = reactive({ categories: [], realms: [], grades: [] })
-const activeCategory = ref('全部')
-const activeGrade = ref('全部')
-const activeRealm = ref('全部')
-const sourceNote = ref('')
 const hotKeys = ['青元剑诀', '梵圣真魔功', '春黎剑阵', '大衍诀', '筑基丹丹方', '血影遁']
-const searchStamp = ref(0)     // 每次刷新自增，让卡片重新播放入场动画
 const activeNav = ref('')
 const shell = ref(null)
 
-// ===== 法宝阁状态 =====
-const treasureItems = ref([])
-const treasureFacets = reactive({ categories: [], realms: [], grades: [] })
-const activeTCategory = ref('全部')
-const activeTGrade = ref('全部')
-const activeTRealm = ref('全部')
-const tSearchStamp = ref(0)
-
-const SECTIONS = ['repository', 'treasure', 'cave', 'dao']
-
-// 取功法封面：优先接口返回的 image 字段（数据库 t_manual.image），
-// 为相对路径时拼接后端地址；接口未带（本地 mock 模式）则用前端清单兜底。
-const API_BASE = import.meta.env.VITE_API_BASE || ''
-function coverOf(it) {
-  if (it && it.image) {
-    return it.image.startsWith('http') ? it.image : API_BASE + it.image
-  }
-  return manualImage(it?.name)
-}
+// 首页仅保留 洞府 / 论道 两个页内区块用于滚动高亮（藏经阁、法宝阁已拆分为独立页面）
+const SECTIONS = ['cave', 'dao']
 
 onMounted(async () => {
   // 拉取道友信息（后端未启动时静默降级）
   try { await auth.fetchProfile() } catch (_) { /* 后端未连，用本地信息 */ }
-  // 拉取筛选维度 + 首屏全部秘籍
-  const f = await fetchFacets()
-  facets.categories = f.categories
-  facets.realms = f.realms
-  facets.grades = f.grades
-  await loadManuals()
-  // 拉取法宝阁筛选维度 + 首屏全部法宝
-  const tf = await fetchTreasureFacets()
-  treasureFacets.categories = tf.categories
-  treasureFacets.realms = tf.realms
-  treasureFacets.grades = tf.grades
-  await loadTreasures()
-  // scrollspy
   if (shell.value) shell.value.addEventListener('scroll', onScroll, { passive: true })
   onScroll()
 })
@@ -308,27 +100,9 @@ onUnmounted(() => {
   if (shell.value) shell.value.removeEventListener('scroll', onScroll)
 })
 
-// 筛选变化即重新拉取
-watch([activeCategory, activeGrade, activeRealm], () => loadManuals())
-
-async function loadManuals() {
-  const res = await fetchManuals({
-    category: activeCategory.value,
-    grade: activeGrade.value,
-    realm: activeRealm.value,
-    q: keyword.value
-  })
-  items.value = res.items
-  searchStamp.value++
-  sourceNote.value =
-    res.source === 'remote' ? ''
-      : res.source === 'fallback' ? '（后端未连，暂阅本地藏经）'
-      : '（本地藏经模式）'
-}
-
+// 首页搜索 → 跳转到藏经阁列表页，并带上关键字
 function onSearch() {
-  loadManuals()
-  scrollTo('repository')
+  router.push({ path: '/sutras', query: keyword.value ? { q: keyword.value } : {} })
 }
 
 function quickSearch(k) {
@@ -356,37 +130,12 @@ function scrollTo(id) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-function goDetail(id) {
-  router.push({ name: 'manual', params: { id } })
+// 导航：藏经阁 / 法宝阁 跳转到独立页面
+function goSutras() {
+  router.push('/sutras')
 }
-
-// ===== 法宝阁 =====
-const T_API_BASE = import.meta.env.VITE_API_BASE || ''
-function tCoverOf(it) {
-  if (it && it.image) {
-    if (it.image.startsWith('http')) return it.image
-    return T_API_BASE ? T_API_BASE + it.image : null
-  }
-  return null
-}
-
-async function loadTreasures() {
-  const res = await fetchTreasures({
-    category: activeTCategory.value,
-    grade: activeTGrade.value,
-    realm: activeTRealm.value,
-    q: keyword.value
-  })
-  treasureItems.value = res.items
-  tSearchStamp.value++
-  sourceNote.value =
-    res.source === 'remote' ? ''
-      : res.source === 'fallback' ? '（后端未连，暂阅本地藏经）'
-      : '（本地藏经模式）'
-}
-
-function goTreasureDetail(id) {
-  router.push({ name: 'treasure', params: { id } })
+function goTreasures() {
+  router.push('/treasures')
 }
 
 function goAdmin() {
