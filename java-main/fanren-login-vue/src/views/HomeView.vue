@@ -2,30 +2,6 @@
   <div class="stage">
     <div class="home-shell" ref="shell">
 
-      <!-- ===== 导航栏 ===== -->
-      <header class="navbar">
-        <div class="brand" @click="scrollTo('top')">
-          <span class="seal-mini">藏</span>
-          <span class="brand-name">凡人修仙 · 藏经阁</span>
-        </div>
-        <nav class="nav-links">
-          <a @click.prevent="goSutras">藏经阁</a>
-          <a @click.prevent="goTreasures">法宝</a>
-          <a :class="{ active: activeNav === 'cave' }" @click.prevent="scrollTo('cave')">洞府</a>
-          <a :class="{ active: activeNav === 'dao' }" @click.prevent="scrollTo('dao')">论道</a>
-        </nav>
-
-        <!-- 后台管理系统入口：仅管理员(permission=0)可见 -->
-        <a v-if="auth.permission === 0" class="nav-admin" @click.prevent="goAdmin">后台管理系统</a>
-
-        <div class="user-box">
-          <span class="user-chip" @click="scrollTo('cave')">
-            <i class="dot"></i>{{ auth.user || '无名' }} · {{ auth.profile?.realm || '炼气' }}
-          </span>
-          <button class="btn-exit" @click="onLogout" title="退出登录">退归山林</button>
-        </div>
-      </header>
-
       <!-- ===== 顶部：搜索 ===== -->
       <section class="hero" id="top">
         <div class="watermark" aria-hidden="true">藏</div>
@@ -46,6 +22,53 @@
         <div class="hot">
           <span class="hot-label">热门：</span>
           <a v-for="k in hotKeys" :key="k" @click.prevent="quickSearch(k)">{{ k }}</a>
+        </div>
+      </section>
+
+      <!-- ===== 当日新增功法 / 法宝（首页数据区块） ===== -->
+      <section v-for="p in panels" :key="p.key" class="block">
+        <h2 class="block-title"><i class="orn"></i>{{ p.title }}<i class="orn r"></i></h2>
+        <p class="block-sub">
+          {{ p.sub }} · 共 {{ p.items.length }} 卷
+          <a class="more" @click.prevent="p.goAll()">查看全部 ›</a>
+        </p>
+
+        <div v-if="p.items.length" class="grid">
+          <article
+            v-for="(it, i) in p.items"
+            :key="it.id"
+            class="item"
+            :data-grade="it.grade"
+            :style="{ animationDelay: (i * 45) + 'ms' }"
+            @click="p.goItem(it.id)"
+          >
+            <i class="corner" aria-hidden="true"></i>
+            <span class="enter-hint" aria-hidden="true">细览 ›</span>
+            <div class="item-cover" :class="{ 'no-img': !coverOf(it, p.key === 'treasure') }">
+              <img
+                v-if="coverOf(it, p.key === 'treasure')"
+                :src="coverOf(it, p.key === 'treasure')"
+                :alt="it.name"
+                :title="it.name"
+                loading="lazy"
+              />
+              <span v-else class="cover-fallback" aria-hidden="true">{{ (it.category || '').slice(0, 2) }}</span>
+              <span class="cover-grad" aria-hidden="true"></span>
+            </div>
+            <div class="item-head">
+              <span class="grade">{{ it.grade }}阶</span>
+              <span class="type">{{ it.category }}</span>
+              <span class="realm-tag">{{ it.realm }}</span>
+            </div>
+            <h3 class="item-name">{{ it.name }}</h3>
+            <p class="item-desc">{{ it.desc }}</p>
+            <p class="item-origin">出处 · {{ it.origin }}</p>
+          </article>
+        </div>
+        <div v-else class="empty">
+          <div class="cloud" aria-hidden="true">﹀﹀﹀</div>
+          <p>{{ p.empty }}</p>
+          <p class="empty-hint">{{ p.emptyHint }}</p>
         </div>
       </section>
 
@@ -74,78 +97,95 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { fetchManuals } from '../api/sutra'
+import { fetchTreasures } from '../api/treasure'
+import { manualImage } from '../assets/manuals'
+import { treasureImage } from '../assets/treasures'
 
 const auth = useAuthStore()
 const router = useRouter()
 
+const API_BASE = import.meta.env.VITE_API_BASE || ''
 const keyword = ref('')
 const hotKeys = ['青元剑诀', '梵圣真魔功', '春黎剑阵', '大衍诀', '筑基丹丹方', '血影遁']
-const activeNav = ref('')
-const shell = ref(null)
 
-// 首页仅保留 洞府 / 论道 两个页内区块用于滚动高亮（藏经阁、法宝阁已拆分为独立页面）
-const SECTIONS = ['cave', 'dao']
+// 当日新增功法 / 法宝 数据
+const todayManuals = ref([])
+const todayTreasures = ref([])
 
-onMounted(async () => {
-  // 拉取道友信息（后端未启动时静默降级）
-  try { await auth.fetchProfile() } catch (_) { /* 后端未连，用本地信息 */ }
-  if (shell.value) shell.value.addEventListener('scroll', onScroll, { passive: true })
-  onScroll()
-})
+// 是否为“今日新增”（与真实后端 created_at 字段一致）
+function isToday(d) {
+  if (!d) return false
+  const t = new Date(d)
+  const n = new Date()
+  return t.getFullYear() === n.getFullYear() && t.getMonth() === n.getMonth() && t.getDate() === n.getDate()
+}
+function pickToday(items, limit = 6) {
+  return items.filter((i) => isToday(i.createdAt)).slice(0, limit)
+}
 
-onUnmounted(() => {
-  if (shell.value) shell.value.removeEventListener('scroll', onScroll)
-})
+// 封面：优先接口 image（数据库字段 / 后端静态资源），否则回退本地打包清单
+function coverOf(it, isTreasure) {
+  if (it && it.image) {
+    return it.image.startsWith('http') ? it.image : API_BASE + it.image
+  }
+  return isTreasure ? treasureImage(it?.name) : manualImage(it?.name)
+}
+
+// 两个首页数据区块（当日新增功法 / 法宝）
+const panels = computed(() => [
+  {
+    key: 'manual',
+    title: '当日新增功法',
+    sub: '今日新入藏经阁的秘籍',
+    empty: '今日藏经阁尚无新卷入藏。',
+    emptyHint: '道友可前往藏经阁一观，或静候新典。',
+    items: todayManuals.value,
+    goAll: goSutras,
+    goItem: goManual
+  },
+  {
+    key: 'treasure',
+    title: '法宝',
+    sub: '今日新入法宝阁的灵珍',
+    empty: '今日法宝阁尚无新宝入册。',
+    emptyHint: '道友可前往法宝阁一观，或静候新宝。',
+    items: todayTreasures.value,
+    goAll: goTreasures,
+    goItem: goTreasure
+  }
+])
+
+function goSutras() { router.push('/sutras') }
+function goTreasures() { router.push('/treasures') }
+function goManual(id) { router.push({ name: 'manual', params: { id } }) }
+function goTreasure(id) { router.push({ name: 'treasure', params: { id } }) }
 
 // 首页搜索 → 跳转到藏经阁列表页，并带上关键字
 function onSearch() {
   router.push({ path: '/sutras', query: keyword.value ? { q: keyword.value } : {} })
 }
-
 function quickSearch(k) {
   keyword.value = k
   onSearch()
-}
-
-function onScroll() {
-  const el = shell.value
-  if (!el) return
-  const probe = el.scrollTop + el.clientHeight * 0.35
-  let current = ''
-  for (const id of SECTIONS) {
-    const node = document.getElementById(id)
-    if (node && node.offsetTop <= probe) current = id
-  }
-  activeNav.value = current
-}
-
-function scrollTo(id) {
-  if (id === 'top') {
-    shell.value?.scrollTo({ top: 0, behavior: 'smooth' })
-    return
-  }
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-// 导航：藏经阁 / 法宝阁 跳转到独立页面
-function goSutras() {
-  router.push('/sutras')
-}
-function goTreasures() {
-  router.push('/treasures')
-}
-
-function goAdmin() {
-  router.push('/admin/login')
 }
 
 function onLogout() {
   auth.logout()
   router.push('/login')
 }
+
+onMounted(async () => {
+  // 拉取道友信息（后端未启动时静默降级）
+  try { await auth.fetchProfile() } catch (_) { /* 后端未连，用本地信息 */ }
+  // 拉取当日新增功法 / 法宝
+  const [m, t] = await Promise.all([fetchManuals(), fetchTreasures()])
+  todayManuals.value = pickToday(m.items, 6)
+  todayTreasures.value = pickToday(t.items, 6)
+})
 </script>
 
 <style scoped>
@@ -163,86 +203,6 @@ function onLogout() {
   border-radius:8px;background:linear-gradient(180deg,rgba(233,200,120,.5),rgba(233,200,120,.2));
 }
 .home-shell::-webkit-scrollbar-thumb:hover{background:rgba(233,200,120,.65)}
-
-/* ===== 导航栏 ===== */
-.navbar{
-  position:sticky;top:0;z-index:10;
-  display:flex;align-items:center;gap:24px;
-  padding:0 28px;height:64px;
-  background:rgba(7,10,20,.72);
-  backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--line);
-}
-.navbar::after{
-  content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;pointer-events:none;
-  background:linear-gradient(90deg,transparent,rgba(233,200,120,.35) 50%,transparent);
-}
-.brand{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
-.seal-mini{
-  width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
-  background:linear-gradient(145deg,var(--gold),#b88a3c);color:#1a1206;font-weight:700;font-size:15px;
-  box-shadow:0 0 14px rgba(233,200,120,.40);
-  animation:breath 3.2s ease-in-out infinite;
-}
-@keyframes breath{
-  0%,100%{box-shadow:0 0 10px rgba(233,200,120,.35)}
-  50%{box-shadow:0 0 22px rgba(233,200,120,.65)}
-}
-.brand-name{
-  font-size:17px;letter-spacing:2px;font-weight:700;
-  background:linear-gradient(180deg,#fff7e6,var(--gold) 60%,#b98e34);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-.nav-links{display:flex;gap:4px;margin-left:8px}
-.nav-links a{
-  position:relative;padding:8px 14px;border-radius:10px;cursor:pointer;
-  color:var(--ink-dim);font-size:15px;letter-spacing:3px;transition:.2s;
-  border:1px solid transparent;
-}
-.nav-links a:hover{
-  color:var(--gold-2);background:rgba(233,200,120,.08);
-  border-color:rgba(233,200,120,.25);
-}
-.nav-links a.active{color:var(--gold-2)}
-.nav-links a.active::after{
-  content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:2px;
-  width:16px;height:2px;border-radius:2px;
-  background:linear-gradient(90deg,transparent,var(--gold),transparent);
-}
-.nav-admin{
-  margin-left:6px;padding:8px 16px;border-radius:999px;cursor:pointer;
-  font-size:14px;letter-spacing:2px;user-select:none;transition:.2s;
-  color:#0c1322;font-weight:700;
-  background:linear-gradient(135deg,var(--gold-2),var(--gold) 50%,#c79a44);
-  border:1px solid transparent;
-  box-shadow:0 4px 16px rgba(233,200,120,.25);
-}
-.nav-admin:hover{
-  transform:translateY(-1px);
-  box-shadow:0 8px 24px rgba(233,200,120,.45);
-}
-.user-box{margin-left:auto;display:flex;align-items:center;gap:12px}
-.user-chip{
-  display:flex;align-items:center;gap:8px;
-  padding:7px 14px;border-radius:999px;cursor:pointer;
-  border:1px solid var(--line);color:var(--ink);font-size:14px;letter-spacing:1px;
-  background:rgba(20,29,54,.45);transition:.2s;
-}
-.user-chip:hover{border-color:rgba(103,232,249,.4)}
-.user-chip .dot{
-  width:7px;height:7px;border-radius:50%;
-  background:var(--qi);box-shadow:0 0 8px var(--qi);
-  animation:breath 2.6s ease-in-out infinite;
-}
-.btn-exit{
-  padding:7px 14px;border-radius:10px;cursor:pointer;
-  border:1px solid rgba(233,200,120,.35);background:transparent;
-  color:var(--gold);font-family:inherit;font-size:13px;letter-spacing:2px;transition:.2s;
-}
-.btn-exit:hover{
-  background:rgba(233,200,120,.12);box-shadow:0 0 16px rgba(233,200,120,.25);
-}
-.btn-exit.big{padding:13px 26px;font-size:16px;letter-spacing:6px}
 
 /* ===== 顶部搜索 ===== */
 .hero{
@@ -358,53 +318,12 @@ function onLogout() {
 .orn.r::before{background:linear-gradient(90deg,rgba(233,200,120,.6),transparent)}
 .orn.r::after{right:auto;left:-4px}
 
-/* ===== 筛选器 ===== */
-.filters{
-  margin-bottom:26px;
-  padding:18px 20px;border-radius:16px;
-  border:1px solid var(--line);
-  background:linear-gradient(180deg,rgba(20,29,54,.45),rgba(7,10,20,.55));
-  backdrop-filter:blur(6px);
+.block-sub{margin:-14px 0 22px;text-align:center;color:var(--ink-dim);font-size:13px;letter-spacing:2px}
+.block-sub .more{
+  margin-left:10px;color:var(--gold-2);cursor:pointer;
+  border-bottom:1px dashed rgba(233,200,120,.4);padding-bottom:1px;
 }
-.filter-row{
-  display:flex;align-items:flex-start;gap:14px;
-  padding:8px 0;
-}
-.filter-row + .filter-row{border-top:1px dashed var(--line)}
-.filter-label{
-  flex:none;width:48px;padding-top:6px;
-  color:var(--gold);font-size:14px;letter-spacing:3px;font-weight:700;
-}
-.chips{display:flex;flex-wrap:wrap;gap:8px;flex:1}
-.chip{
-  padding:6px 14px;border-radius:999px;cursor:pointer;font-family:inherit;
-  border:1px solid var(--line);
-  background:rgba(20,29,54,.4);color:var(--ink-dim);
-  font-size:13px;letter-spacing:1px;transition:.2s;
-}
-.chip:hover{color:var(--gold-2);border-color:rgba(233,200,120,.3)}
-.chip.active{
-  color:#0c1322;font-weight:700;
-  background:linear-gradient(135deg,var(--gold-2),var(--gold));
-  border-color:transparent;
-}
-/* 品阶 chip 选中配色（天金 / 地紫 / 玄青 / 黄灰）*/
-.chip.grade-天.active{background:linear-gradient(135deg,var(--gold-2),var(--gold));color:#0c1322}
-.chip.grade-地.active{background:rgba(139,109,255,.8);color:#fff}
-.chip.grade-玄.active{background:linear-gradient(135deg,#8be6f6,var(--qi));color:#062024}
-.chip.grade-黄.active{background:rgba(139,155,189,.4);color:var(--ink)}
-.realm-select{
-  font-family:inherit;font-size:13px;letter-spacing:1px;
-  padding:7px 14px;border-radius:10px;cursor:pointer;
-  border:1px solid var(--line);color:var(--ink);
-  background:rgba(7,10,20,.7);outline:none;transition:.2s;
-}
-.realm-select:focus{border-color:rgba(233,200,120,.45)}
-.realm-select option{background:#0d1426;color:var(--ink)}
-.count{
-  margin-left:auto;align-self:center;
-  color:var(--ink-dim);font-size:13px;letter-spacing:2px;
-}
+.block-sub .more:hover{color:var(--gold)}
 
 /* 卡片网格 */
 .grid{
@@ -555,13 +474,12 @@ function onLogout() {
 }
 .footer .orn{margin:0 auto 22px;display:block;width:160px}
 .footer .orn::before{background:linear-gradient(90deg,transparent,rgba(233,200,120,.45),transparent)}
-.footer-dim{font-size:12px;opacity:.6;margin-top:10px;letter-spacing:2px}
+.footer-dim{font-size:12px;opacity:.6;margin-top:10px}
 
 @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
 /* 移动端 */
 @media(max-width:760px){
-  .navbar{padding:0 16px;gap:10px;height:58px}
   .brand-name{display:none}
   .nav-links a{padding:7px 9px;letter-spacing:1px;font-size:13px}
   .nav-admin{padding:6px 11px;font-size:12px;letter-spacing:1px}

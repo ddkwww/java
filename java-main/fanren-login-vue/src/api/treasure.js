@@ -39,6 +39,14 @@ const MOCK_TREASURES = [
   { id: 16, name: '化龙玺',     category: '奇物', grade: '天', realm: '合体期', desc: '上古龙族传承之玺，镇运纳福，亦可引动龙威压敌。', origin: '龙族' }
 ]
 
+// 演示用：标注部分法宝为“今日新增”，使首页“法宝”区块有内容；
+// 真实后端由实体 created_at 字段自动带入，此处仅对本地 mock 生效。
+const TODAY_ISO = new Date().toISOString()
+;[16, 15, 14, 12, 11, 9, 8, 6].forEach((id) => {
+  const m = MOCK_TREASURES.find((x) => x.id === id)
+  if (m) m.createdAt = TODAY_ISO
+})
+
 const REALM_ORDER = ['练气期', '筑基期', '金丹期', '元婴期', '化神期', '炼虚期', '合体期', '大乘期', '渡劫期']
 const GRADE_ORDER = ['天', '地', '玄', '黄']
 
@@ -142,7 +150,7 @@ function nextMockId() {
 export async function createTreasure(payload) {
   if (!BASE) {
     await delay(600)
-    const item = { id: nextMockId(), ...payload }
+    const item = { id: nextMockId(), createdAt: new Date().toISOString(), ...payload }
     MOCK_TREASURES.push(item)
     return item
   }

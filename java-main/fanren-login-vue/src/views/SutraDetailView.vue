@@ -1,18 +1,6 @@
 <template>
   <div class="stage">
     <div class="detail-shell">
-      <!-- ===== 顶栏 ===== -->
-      <header class="topbar">
-        <button class="back" @click="goBack">
-          <span class="arrow">‹</span> 返回藏经阁
-        </button>
-        <div class="brand">
-          <span class="seal-mini">藏</span>
-          <span class="brand-name">凡人修仙 · 藏经阁</span>
-        </div>
-        <span class="source-note">{{ sourceNote }}</span>
-      </header>
-
       <!-- ===== 加载态 ===== -->
       <div v-if="loading" class="loading">
         <div class="spinner" aria-hidden="true"></div>
@@ -173,6 +161,7 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
+  padding-top: 20px;
   padding-bottom: 30px;
 }
 .detail-shell::-webkit-scrollbar { width: 8px; }
@@ -182,59 +171,7 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
   background: linear-gradient(180deg, rgba(233, 200, 120, .5), rgba(233, 200, 120, .2));
 }
 
-/* ===== 顶栏 ===== */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 28px;
-  height: 64px;
-  background: rgba(7, 10, 20, .72);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--line);
-}
-.topbar::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(233, 200, 120, .35) 50%, transparent);
-}
-.back {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 16px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 14px;
-  letter-spacing: 2px;
-  color: var(--gold);
-  border: 1px solid rgba(233, 200, 120, .35);
-  background: transparent;
-  transition: .2s;
-}
-.back:hover {
-  background: rgba(233, 200, 120, .12);
-  box-shadow: 0 0 16px rgba(233, 200, 120, .25);
-}
-.back .arrow { font-size: 18px; line-height: 1; }
-.brand { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
-.seal-mini {
-  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
-  background: linear-gradient(145deg, var(--gold), #b88a3c); color: #1a1206;
-  font-weight: 700; font-size: 15px;
-  box-shadow: 0 0 14px rgba(233, 200, 120, .40);
-}
-.brand-name {
-  font-size: 17px; letter-spacing: 2px; font-weight: 700;
-  background: linear-gradient(180deg, #fff7e6, var(--gold) 60%, #b98e34);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.source-note { margin-left: auto; color: var(--ink-dim); font-size: 12px; letter-spacing: 2px; opacity: .8; }
+/* ===== 顶栏（已统一由全局导航栏承载，此处仅保留详情内容） ===== */
 
 /* ===== 加载 / 空 ===== */
 .loading, .empty {

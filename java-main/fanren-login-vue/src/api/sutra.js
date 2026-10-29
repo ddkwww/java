@@ -67,6 +67,14 @@ const MOCK_MANUALS = [
   { id: 45, name: '渡劫秘要', category: '主修功法', grade: '天', realm: '渡劫期', desc: '渡劫飞升之秘要，引雷劫淬身，九死一生。', origin: '飞升' }
 ]
 
+// 演示用：标注部分秘籍为“今日新增”，使首页“当日新增功法”区块有内容；
+// 真实后端由实体 created_at 字段自动带入，此处仅对本地 mock 生效。
+const TODAY_ISO = new Date().toISOString()
+;[44, 45, 46, 43, 42, 41, 39, 35].forEach((id) => {
+  const m = MOCK_MANUALS.find((x) => x.id === id)
+  if (m) m.createdAt = TODAY_ISO
+})
+
 const REALM_ORDER = ['练气期', '筑基期', '金丹期', '元婴期', '化神期', '炼虚期', '合体期', '大乘期', '渡劫期']
 const GRADE_ORDER = ['天', '地', '玄', '黄']
 
@@ -174,7 +182,7 @@ function nextMockId() {
 export async function createManual(payload) {
   if (!BASE) {
     await delay(600)
-    const item = { id: nextMockId(), ...payload }
+    const item = { id: nextMockId(), createdAt: new Date().toISOString(), ...payload }
     MOCK_MANUALS.push(item)
     return item
   }

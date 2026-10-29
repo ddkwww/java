@@ -2,18 +2,6 @@
   <div class="stage">
     <div class="list-shell" ref="shell">
 
-      <!-- ===== 顶栏 ===== -->
-      <header class="topbar">
-        <button class="back" @click="goHome">
-          <span class="arrow">‹</span> 返回首页
-        </button>
-        <div class="brand">
-          <span class="seal-mini">{{ isTreasure ? '宝' : '藏' }}</span>
-          <span class="brand-name">{{ isTreasure ? '凡人修仙 · 法宝阁' : '凡人修仙 · 藏经阁' }}</span>
-        </div>
-        <span class="source-note">{{ sourceNote }}</span>
-      </header>
-
       <!-- ===== 顶部：搜索 ===== -->
       <section class="hero">
         <div class="watermark" aria-hidden="true">{{ isTreasure ? '宝' : '藏' }}</div>
@@ -39,6 +27,8 @@
           <span class="hot-label">热门：</span>
           <a v-for="k in hotKeys" :key="k" @click.prevent="quickSearch(k)">{{ k }}</a>
         </div>
+
+        <div v-if="sourceNote" class="source-note">{{ sourceNote }}</div>
       </section>
 
       <!-- ===== 列表（功法 / 法宝 共用） ===== -->
@@ -228,9 +218,6 @@ function goDetail(id) {
     ? { name: 'treasure', params: { id } }
     : { name: 'manual', params: { id } })
 }
-function goHome() {
-  router.push('/')
-}
 
 onMounted(async () => {
   await loadFacets()
@@ -244,6 +231,18 @@ onUnmounted(() => {
 })
 
 watch([activeCategory, activeGrade, activeRealm], () => loadItems())
+
+// 藏经阁 / 法宝阁共用本组件：Vue Router 在 /sutras ↔ /treasures 间切换时会复用组件实例，
+// onMounted 不再执行，列表不会重载（切到法宝阁仍显示功法）。此处监听 meta.type 变化，
+// 切换即重置筛选并重新拉取对应数据，确保内容随导航栏切换而改变。
+watch(() => route.meta.type, async () => {
+  activeCategory.value = '全部'
+  activeGrade.value = '全部'
+  activeRealm.value = '全部'
+  keyword.value = (route.query.q && String(route.query.q)) || ''
+  await loadFacets()
+  await loadItems()
+})
 
 function onScroll() {
   // 列表页无需 scrollspy 高亮，保留占位以便后续扩展
@@ -259,36 +258,8 @@ function onScroll() {
   border-radius:8px;background:linear-gradient(180deg,rgba(233,200,120,.5),rgba(233,200,120,.2));
 }
 
-/* ===== 顶栏 ===== */
-.topbar{
-  position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;
-  padding:0 28px;height:64px;background:rgba(7,10,20,.72);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--line);
-}
-.topbar::after{
-  content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;pointer-events:none;
-  background:linear-gradient(90deg,transparent,rgba(233,200,120,.35) 50%,transparent);
-}
-.back{
-  display:flex;align-items:center;gap:4px;padding:8px 16px;border-radius:10px;cursor:pointer;
-  font-family:inherit;font-size:14px;letter-spacing:2px;color:var(--gold);
-  border:1px solid rgba(233,200,120,.35);background:transparent;transition:.2s;
-}
-.back:hover{background:rgba(233,200,120,.12);box-shadow:0 0 16px rgba(233,200,120,.25)}
-.back .arrow{font-size:18px;line-height:1}
-.brand{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
-.seal-mini{
-  width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
-  background:linear-gradient(145deg,var(--gold),#b88a3c);color:#1a1206;font-weight:700;font-size:15px;
-  box-shadow:0 0 14px rgba(233,200,120,.40);animation:breath 3.2s ease-in-out infinite;
-}
-@keyframes breath{0%,100%{box-shadow:0 0 10px rgba(233,200,120,.35)}50%{box-shadow:0 0 22px rgba(233,200,120,.65)}}
-.brand-name{
-  font-size:17px;letter-spacing:2px;font-weight:700;
-  background:linear-gradient(180deg,#fff7e6,var(--gold) 60%,#b98e34);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-.source-note{margin-left:auto;color:var(--ink-dim);font-size:12px;letter-spacing:2px;opacity:.8}
+/* 源说明（列表页置于搜索区下方居中展示） */
+.source-note{margin:16px 0 0;text-align:center;color:var(--ink-dim);font-size:12px;letter-spacing:2px;opacity:.8}
 
 /* ===== 顶部搜索 ===== */
 .hero{position:relative;text-align:center;overflow:hidden;padding:88px 24px 56px}
@@ -416,7 +387,6 @@ function onScroll() {
 
 /* 移动端 */
 @media(max-width:760px){
-  .topbar{padding:0 16px;gap:10px;height:58px}
   .brand-name{display:none}
   .source-note{display:none}
   .title{font-size:36px;letter-spacing:12px;text-indent:12px}
