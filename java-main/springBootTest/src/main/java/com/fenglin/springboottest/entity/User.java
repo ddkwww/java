@@ -57,6 +57,34 @@ public class User {
     @Column(length = 32)
     private String realm;
 
+    /** 修为总层数（1-81）：境界序号×9 + 小境界层数，数值系统核心字段，默认 1（练气初期一层） */
+    @Column(name = "total_level", columnDefinition = "int default 1")
+    private Integer totalLevel = 1;
+
+    /** 灵石余额（经济系统），默认 0 灵石 */
+    @Column(name = "spirit_stone", columnDefinition = "int default 0")
+    private Integer spiritStone = 0;
+
+    /** 灵气余额（修炼突破体系第二资源），默认 0 点 */
+    @Column(name = "spirit_qi", columnDefinition = "int default 0")
+    private Integer spiritQi = 0;
+
+    /** 已消耗天数（岁，寿元流逝累计）。打坐/除妖/挖矿/突破都会消耗天数，与寿元挂钩 */
+    @Column(name = "age_used", columnDefinition = "int default 0")
+    private Integer ageUsed = 0;
+
+    /** 打坐修炼最后获取时间（冷却用） */
+    @Column(name = "last_meditate_at")
+    private LocalDateTime lastMeditateAt;
+
+    /** 斩妖除魔最后获取时间（冷却用） */
+    @Column(name = "last_hunt_at")
+    private LocalDateTime lastHuntAt;
+
+    /** 挖矿最后获取灵石时间（冷却用） */
+    @Column(name = "last_mine_at")
+    private LocalDateTime lastMineAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -159,6 +187,62 @@ public class User {
 
     public void setRealm(String realm) {
         this.realm = realm;
+    }
+
+    public Integer getTotalLevel() {
+        return totalLevel;
+    }
+
+    public void setTotalLevel(Integer totalLevel) {
+        this.totalLevel = totalLevel;
+    }
+
+    public Integer getSpiritStone() {
+        return spiritStone;
+    }
+
+    public void setSpiritStone(Integer spiritStone) {
+        this.spiritStone = spiritStone;
+    }
+
+    public Integer getSpiritQi() {
+        return spiritQi;
+    }
+
+    public void setSpiritQi(Integer spiritQi) {
+        this.spiritQi = spiritQi;
+    }
+
+    public Integer getAgeUsed() {
+        return ageUsed;
+    }
+
+    public void setAgeUsed(Integer ageUsed) {
+        this.ageUsed = ageUsed;
+    }
+
+    public LocalDateTime getLastMineAt() {
+        return lastMineAt;
+    }
+
+    public void setLastMineAt(LocalDateTime lastMineAt) {
+        this.lastMineAt = lastMineAt;
+    }
+
+    public LocalDateTime getLastMeditateAt() {
+        return lastMeditateAt;
+    }
+
+    public void setLastMeditateAt(LocalDateTime lastMeditateAt) {
+        this.lastMeditateAt = lastMeditateAt;
+    }
+
+    public LocalDateTime getLastHuntAt() {
+        return lastHuntAt;
+    }
+
+    public void setLastHuntAt(LocalDateTime lastHuntAt) {
+        this.lastHuntAt = lastHuntAt;
     }
 
     public LocalDateTime getCreatedAt() {

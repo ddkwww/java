@@ -3,6 +3,7 @@ package com.fenglin.springboottest;
 import com.fenglin.springboottest.entity.Manual;
 import com.fenglin.springboottest.repository.ManualRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -11,8 +12,10 @@ import java.util.List;
  * 藏经阁数据灌入：应用启动时若 t_manual 为空，则录入《凡人修仙传》功法秘籍。
  * 仅灌一次（以表内是否有数据判定），便于后续在库中增删而不被覆盖。
  * image 为后端静态资源路径（static/images/manuals/），历史数据用 SQL 按名称回填。
+ * @Order(10)：先于 ItemStatSeeder(20) 灌入数据，保证数值回填时物品已存在。
  */
 @Component
+@Order(10)
 public class SutraDataSeeder implements CommandLineRunner {
 
     private final ManualRepository manualRepository;

@@ -7,9 +7,11 @@ import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
 import TreasureDetailView from '../views/TreasureDetailView.vue'
 import CollectionView from '../views/CollectionView.vue'
+import StatsView from '../views/StatsView.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
+  { path: '/stats', name: 'stats', component: StatsView, meta: { requiresAuth: true } },
   { path: '/manual/:id', name: 'manual', component: SutraDetailView, meta: { requiresAuth: true } },
   { path: '/treasure/:id', name: 'treasure', component: TreasureDetailView, meta: { requiresAuth: true } },
   // 藏经阁 / 法宝阁：独立页面（由同一 CollectionView 按 meta.type 区分）

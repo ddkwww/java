@@ -109,6 +109,7 @@
             <h3 class="item-name">{{ it.name }}</h3>
             <p class="item-desc">{{ it.desc }}</p>
             <p class="item-origin">出处 · {{ it.origin }}</p>
+            <p class="item-price"><span class="price-icon" aria-hidden="true">灵</span>{{ priceOf(it) }} 灵石</p>
           </article>
         </div>
         <div v-else class="empty">
@@ -163,6 +164,22 @@ function coverOf(it) {
     return it.image.startsWith('http') ? it.image : API_BASE + it.image
   }
   return isTreasure.value ? treasureImage(it?.name) : manualImage(it?.name)
+}
+
+// 价格：优先接口 price 字段；缺失时按品阶×境界×类别估算兜底
+const PRICE_POOL = { 天: 2000, 地: 800, 玄: 300, 黄: 100 }
+const PRICE_REALM = { 练气期: 1, 筑基期: 1.5, 金丹期: 2.5, 元婴期: 4, 化神期: 6, 炼虚期: 8, 合体期: 10, 大乘期: 12, 渡劫期: 15 }
+const PRICE_MANUAL_CAT = { 主修功法: 1.0, 神通: 1.2, 炼丹: 0.8, 符箓: 0.8, 阵法: 0.8, 傀儡: 0.8, 炼器: 0.8, 法术: 0.6, 秘术: 0.6 }
+const PRICE_TREASURE_CAT = { 飞剑: 1.0, 攻伐: 1.0, 护身: 1.0, 遁法: 0.9, 奇物: 1.1, 储物: 0.5 }
+
+function priceOf(it) {
+  if (!it) return 0
+  if (it.price != null) return it.price
+  const pool = (PRICE_POOL[it.grade] || 100) * (PRICE_REALM[it.realm] || 1)
+  const coef = isTreasure.value
+    ? (PRICE_TREASURE_CAT[it.category] || 1.0)
+    : (PRICE_MANUAL_CAT[it.category] || 1.0)
+  return Math.round(pool * coef)
 }
 
 function setSourceNote(source) {
@@ -359,6 +376,8 @@ function onScroll() {
 .item-name{font-size:19px;letter-spacing:2px;color:var(--ink);margin-bottom:8px}
 .item-desc{font-size:15px;line-height:1.8;color:var(--ink-dim);letter-spacing:.5px}
 .item-origin{margin-top:10px;font-size:14px;letter-spacing:1px;color:var(--gold);opacity:.8}
+.item-price{margin-top:8px;display:flex;align-items:center;gap:6px;font-size:15px;color:var(--gold-2);font-weight:700;letter-spacing:1px}
+.price-icon{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;border-radius:50%;font-size:11px;background:linear-gradient(135deg,var(--gold-2),var(--gold));color:#0c1322;font-weight:700}
 .corner{position:absolute;top:12px;right:14px;width:8px;height:8px;transform:rotate(45deg) scale(0);transition:transform .3s .05s;background:linear-gradient(135deg,var(--gold-2),var(--gold));box-shadow:0 0 10px rgba(233,200,120,.7)}
 .item:hover .corner{transform:rotate(45deg) scale(1)}
 .item[data-grade="天"] .grade{color:#0c1322;background:linear-gradient(135deg,var(--gold-2),var(--gold))}

@@ -6,8 +6,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ManualRepository extends JpaRepository<Manual, Long> {
+
+    Optional<Manual> findFirstByName(String name);
 
     /**
      * 关键字搜索：名称 / 简介 / 分类 / 境界 / 出处 任一字段命中即返回（忽略大小写）。

@@ -3,6 +3,7 @@ package com.fenglin.springboottest;
 import com.fenglin.springboottest.entity.Treasure;
 import com.fenglin.springboottest.repository.TreasureRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -11,8 +12,10 @@ import java.util.List;
  * 法宝阁数据灌入：应用启动时若 t_treasure 为空，则录入《凡人修仙传》法宝。
  * 仅灌一次（以表内是否有数据判定），便于后续在库中增删而不被覆盖。
  * image 复用静态图池（static/images/manuals/），保证卡片与详情页有插画兜底。
+ * @Order(10)：先于 ItemStatSeeder(20) 灌入数据，保证数值回填时物品已存在。
  */
 @Component
+@Order(10)
 public class TreasureDataSeeder implements CommandLineRunner {
 
     private final TreasureRepository treasureRepository;

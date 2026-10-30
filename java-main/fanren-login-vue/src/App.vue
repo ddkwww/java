@@ -17,6 +17,7 @@
       <nav class="nav-links">
         <a :class="{ active: isSutras }" @click.prevent="goSutras">藏经阁</a>
         <a :class="{ active: isTreasures }" @click.prevent="goTreasures">法宝</a>
+        <a :class="{ active: isStats }" @click.prevent="goStats">修为</a>
         <a :class="{ active: activeAnchor === 'cave' }" @click.prevent="scrollTo('cave')">洞府</a>
         <a :class="{ active: activeAnchor === 'dao' }" @click.prevent="scrollTo('dao')">论道</a>
       </nav>
@@ -25,6 +26,9 @@
       <a v-if="auth.permission === 0" class="nav-admin" @click.prevent="goAdmin">后台管理系统</a>
 
       <div class="user-box">
+        <span class="stone-chip" title="灵石" @click="goStats">
+          <i class="stone-dot">灵</i>{{ auth.spiritStone }}
+        </span>
         <span class="user-chip" @click="scrollTo('cave')">
           <i class="dot"></i>{{ auth.user || '无名' }} · {{ auth.profile?.realm || '炼气' }}
         </span>
@@ -57,12 +61,14 @@ const showNav = computed(() => !HIDDEN.includes(route.name))
 const isHome = computed(() => route.name === 'home')
 const isSutras = computed(() => route.name === 'sutras' || route.name === 'manual')
 const isTreasures = computed(() => route.name === 'treasures' || route.name === 'treasure')
+const isStats = computed(() => route.name === 'stats')
 
 const activeAnchor = ref('')
 
 function goHome() { router.push('/') }
 function goSutras() { router.push('/sutras') }
 function goTreasures() { router.push('/treasures') }
+function goStats() { router.push('/stats') }
 function goAdmin() { router.push('/admin/login') }
 
 function onBrand() {
@@ -103,8 +109,10 @@ function onScroll() {
 }
 
 onMounted(async () => {
-  // 拉取道友信息（后端未启动时静默降级），供导航栏显示境界
-  try { await auth.fetchProfile() } catch (_) { /* 后端未连，用本地信息 */ }
+  // 拉取道友信息（后端未启动时静默降级），供导航栏显示境界与灵石
+  try {
+    await auth.fetchProfile()
+  } catch (_) { /* 后端未连，用本地信息 */ }
   window.addEventListener('scroll', onScroll, true) // 捕获：监听内部滚动容器
   onScroll()
 })
@@ -205,6 +213,18 @@ watch(() => route.fullPath, () => nextTick(onScroll))
   box-shadow:0 8px 24px rgba(233,200,120,.45);
 }
 .user-box{margin-left:auto;display:flex;align-items:center;gap:12px}
+.stone-chip{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 12px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(233,200,120,.35);color:var(--gold-2);
+  font-size:14px;font-weight:700;letter-spacing:1px;
+  background:rgba(233,200,120,.06);transition:.2s;
+}
+.stone-chip:hover{border-color:rgba(233,200,120,.6);box-shadow:0 0 12px rgba(233,200,120,.25)}
+.stone-dot{
+  width:18px;height:18px;border-radius:50%;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--gold-2),var(--gold));color:#0c1322;font-size:11px;font-weight:700;
+}
 .user-chip{
   display:flex;align-items:center;gap:8px;
   padding:7px 14px;border-radius:999px;cursor:pointer;
@@ -233,6 +253,7 @@ watch(() => route.fullPath, () => nextTick(onScroll))
   .nav-links a{padding:7px 9px;letter-spacing:1px;font-size:13px}
   .nav-admin{padding:6px 11px;font-size:12px;letter-spacing:1px}
   .user-chip{display:none}
+  .stone-chip{padding:5px 9px;font-size:12px}
   .back-home{padding:7px 10px;font-size:12px}
 }
 </style>

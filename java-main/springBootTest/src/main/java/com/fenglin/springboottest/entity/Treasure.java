@@ -41,12 +41,41 @@ public class Treasure {
     @Column(length = 128)
     private String image;
 
+    // ===== 数值系统：属性加成（可空；为空时按 品阶×适用境界 自动计算） =====
+    /** 生命加成 */
+    @Column(name = "bonus_hp")
+    private Integer bonusHp;
+    /** 寿元加成 */
+    @Column(name = "bonus_lifespan")
+    private Integer bonusLifespan;
+    /** 攻击加成 */
+    @Column(name = "bonus_atk")
+    private Integer bonusAtk;
+    /** 防御加成 */
+    @Column(name = "bonus_def")
+    private Integer bonusDef;
+    /** 速度加成 */
+    @Column(name = "bonus_spd")
+    private Integer bonusSpd;
+
+    /** 售价（单位：灵石），经济系统字段 */
+    @Column(name = "price")
+    private Integer price;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     @PrePersist
     void onCreate() {
         this.createdAt = LocalDateTime.now();
+    }
+
+    public Integer getPrice() {
+        return price;
+    }
+
+    public void setPrice(Integer price) {
+        this.price = price;
     }
 
     public Long getId() {
@@ -111,6 +140,46 @@ public class Treasure {
 
     public void setImage(String image) {
         this.image = image;
+    }
+
+    public Integer getBonusHp() {
+        return bonusHp;
+    }
+
+    public void setBonusHp(Integer bonusHp) {
+        this.bonusHp = bonusHp;
+    }
+
+    public Integer getBonusLifespan() {
+        return bonusLifespan;
+    }
+
+    public void setBonusLifespan(Integer bonusLifespan) {
+        this.bonusLifespan = bonusLifespan;
+    }
+
+    public Integer getBonusAtk() {
+        return bonusAtk;
+    }
+
+    public void setBonusAtk(Integer bonusAtk) {
+        this.bonusAtk = bonusAtk;
+    }
+
+    public Integer getBonusDef() {
+        return bonusDef;
+    }
+
+    public void setBonusDef(Integer bonusDef) {
+        this.bonusDef = bonusDef;
+    }
+
+    public Integer getBonusSpd() {
+        return bonusSpd;
+    }
+
+    public void setBonusSpd(Integer bonusSpd) {
+        this.bonusSpd = bonusSpd;
     }
 
     public LocalDateTime getCreatedAt() {

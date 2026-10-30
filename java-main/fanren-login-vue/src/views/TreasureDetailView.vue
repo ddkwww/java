@@ -35,6 +35,7 @@
             <div class="meta">
               <span class="tag realm">{{ treasure.realm }}</span>
               <span class="tag origin">出处 · {{ treasure.origin }}</span>
+              <span class="tag price">灵 · {{ priceText }}</span>
             </div>
             <p class="lead">{{ treasure.desc }}</p>
           </div>
@@ -49,6 +50,32 @@
             <div class="line"><span class="k">品　阶</span><span class="v" :data-grade="treasure.grade">{{ treasure.grade }}阶</span></div>
             <div class="line"><span class="k">境　界</span><span class="v">{{ treasure.realm }}</span></div>
             <div class="line"><span class="k">出　处</span><span class="v">{{ treasure.origin }}</span></div>
+          </div>
+
+          <!-- 属性加成 -->
+          <div v-if="hasBonus" class="bonus-block">
+            <h3 class="bonus-title"><i class="orn"></i>炼成加成<i class="orn r"></i></h3>
+            <div class="bonus-grid">
+              <div v-for="b in bonusList" :key="b.key" class="bonus-cell" :data-zero="b.value === 0">
+                <span class="bonus-icon" aria-hidden="true">{{ b.icon }}</span>
+                <span class="bonus-k">{{ b.name }}</span>
+                <span class="bonus-v">{{ b.value > 0 ? '+' + b.value : '—' }}</span>
+                <span class="bonus-unit">{{ b.unit }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 价格 + 购买 -->
+          <div class="buy-block">
+            <div class="buy-price">
+              <span class="buy-icon" aria-hidden="true">灵</span>
+              <span class="buy-val">{{ priceText }}</span>
+              <span class="buy-unit">灵石</span>
+            </div>
+            <button class="buy-btn" :disabled="buying" @click="onBuy">
+              <span>{{ buying ? '交易中…' : '购得此宝' }}</span>
+            </button>
+            <p v-if="buyTip" class="buy-tip">{{ buyTip }}</p>
           </div>
         </div>
       </article>
@@ -91,24 +118,34 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchTreasureDetail, fetchTreasures } from '../api/treasure'
+import { buyTreasure } from '../api/stats'
+import { useAuthStore } from '../stores/auth'
+import { treasureImage } from '../assets/treasures'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const treasure = ref(null)
 const loading = ref(true)
 const related = ref([])
 const sourceNote = ref('')
+const buying = ref(false)
+const buyTip = ref('')
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
-// 取封面：优先接口 image 字段（数据库 t_treasure.image，后端静态资源），
-// 为相对路径则拼接后端地址；无图则本地模式走兜底（避免 mock 下出现破图）。
+// 取封面：优先本地打包立绘（public/treasures/treasure-N.png，reboot 免疫、稳定可用），
+// 未收录时再退回接口 image 字段（数据库 t_treasure.image，后端静态资源），
+// 为相对路径则拼接后端地址；两者皆无则回 null（由模板走分类兜底底纹）。
 function coverOf(it) {
-  if (it && it.image) {
+  if (!it) return null
+  const local = treasureImage(it.name)
+  if (local) return local
+  if (it.image) {
     if (it.image.startsWith('http')) return it.image
     return API_BASE ? API_BASE + it.image : null
   }
@@ -137,12 +174,77 @@ async function load(id) {
 const cover = ref('')
 watch(treasure, (t) => { cover.value = t ? coverOf(t) : '' }, { immediate: true })
 
+// ===== 属性加成展示 =====
+// 后端返回 bonusHp / bonusLifespan / bonusAtk / bonusDef / bonusSpd；
+// 未配置后端（mock）或字段缺失时，按品阶×境界自动估算，保证详情页始终有数值可看。
+const bonusList = computed(() => {
+  const t = treasure.value
+  if (!t) return []
+  return [
+    { key: 'hp', name: '生命', icon: '命', value: bonusVal(t, 'bonusHp', 'hp'), unit: '' },
+    { key: 'lifespan', name: '寿元', icon: '寿', value: bonusVal(t, 'bonusLifespan', 'lifespan'), unit: '年' },
+    { key: 'atk', name: '攻击', icon: '攻', value: bonusVal(t, 'bonusAtk', 'atk'), unit: '' },
+    { key: 'def', name: '防御', icon: '防', value: bonusVal(t, 'bonusDef', 'def'), unit: '' },
+    { key: 'spd', name: '速度', icon: '速', value: bonusVal(t, 'bonusSpd', 'spd'), unit: '' }
+  ]
+})
+
+const hasBonus = computed(() => bonusList.value.some((b) => b.value > 0))
+
+const GRADE_MULT = { 天: 8, 地: 4, 玄: 2, 黄: 1 }
+const REALM_COEF = { 练气期: 1, 筑基期: 1.5, 金丹期: 2.5, 元婴期: 4, 化神期: 6, 炼虚期: 8, 合体期: 10, 大乘期: 12, 渡劫期: 15 }
+const CAT_RATIO = {
+  飞剑: { hp: 0, lifespan: 0, atk: 1.0, def: 0, spd: 0 },
+  攻伐: { hp: 0, lifespan: 0, atk: 1.0, def: 0, spd: 0 },
+  护身: { hp: 0, lifespan: 0, atk: 0, def: 1.0, spd: 0 },
+  遁法: { hp: 0, lifespan: 0, atk: 0, def: 0, spd: 1.0 },
+  奇物: { hp: 0.40, lifespan: 0.60, atk: 0, def: 0, spd: 0 },
+  储物: { hp: 1.0, lifespan: 0, atk: 0, def: 0, spd: 0 }
+}
+const GRADE_POOL = { 天: 800, 地: 320, 玄: 120, 黄: 40 }
+
+function bonusVal(t, field, dim) {
+  if (t[field] != null) return Number(t[field]) || 0
+  const pool = (GRADE_POOL[t.grade] || 40) * (REALM_COEF[t.realm] || 1)
+  const ratio = (CAT_RATIO[t.category] || CAT_RATIO['奇物'])[dim] || 0
+  return Math.round(pool * ratio)
+}
+
 function goDetail(id) {
   router.push({ name: 'treasure', params: { id } })
 }
 
 function goBack() {
   router.push({ name: 'home' })
+}
+
+// ===== 价格展示 =====
+// 后端返回 price 字段；缺失时按品阶×境界估算兜底
+const PRICE_POOL = { 天: 2000, 地: 800, 玄: 300, 黄: 100 }
+const PRICE_CAT = { 飞剑: 1.0, 攻伐: 1.0, 护身: 1.0, 遁法: 0.9, 奇物: 1.1, 储物: 0.5 }
+
+const priceText = computed(() => {
+  const t = treasure.value
+  if (!t) return '0'
+  if (t.price != null) return String(t.price)
+  const pool = (PRICE_POOL[t.grade] || 100) * (REALM_COEF[t.realm] || 1)
+  const coef = PRICE_CAT[t.category] || 1.0
+  return String(Math.round(pool * coef))
+})
+
+async function onBuy() {
+  if (buying.value) return
+  buying.value = true
+  buyTip.value = ''
+  try {
+    const data = await buyTreasure(treasure.value.id)
+    if (data.spiritStone != null) auth.setSpiritStone(data.spiritStone)
+    buyTip.value = data.message || '购得成功'
+  } catch (e) {
+    buyTip.value = e.message || '购买失败'
+  } finally {
+    buying.value = false
+  }
 }
 
 onMounted(() => load(route.params.id))
@@ -267,6 +369,7 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
 }
 .tag.realm { color: var(--qi); border-color: rgba(103, 232, 249, .3); }
 .tag.origin { color: var(--gold); border-color: rgba(233, 200, 120, .3); }
+.tag.price { color: var(--gold-2); border-color: rgba(233, 200, 120, .45); font-weight: 700; }
 .lead {
   font-size: 16px; line-height: 1.95; letter-spacing: .5px; color: var(--ink-dim);
   border-left: 3px solid var(--gold); padding-left: 16px;
@@ -314,6 +417,73 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
 .line .v[data-grade="地"] { color: #b9a6ff; }
 .line .v[data-grade="玄"] { color: var(--qi); }
 .line .v[data-grade="黄"] { color: var(--ink-dim); }
+
+/* ===== 属性加成区块 ===== */
+.bonus-block {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px dashed rgba(233, 200, 120, .2);
+}
+.bonus-title {
+  display: flex; align-items: center; gap: 16px; justify-content: center;
+  color: var(--gold); font-size: 16px; letter-spacing: 4px; font-weight: 700; margin-bottom: 18px;
+}
+.bonus-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+}
+.bonus-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 14px 8px; border-radius: 12px;
+  border: 1px solid rgba(103, 232, 249, .18);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(103, 232, 249, .08), rgba(7, 10, 20, .4));
+  transition: transform .2s, box-shadow .2s;
+}
+.bonus-cell:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0, 0, 0, .35); }
+.bonus-cell[data-zero="true"] { opacity: .45; }
+.bonus-icon {
+  display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center;
+  border-radius: 50%; font-size: 14px; margin-bottom: 2px;
+  border: 1px solid rgba(103, 232, 249, .3); color: var(--qi);
+}
+.bonus-k { font-size: 12px; color: var(--ink-dim); letter-spacing: 1px; }
+.bonus-v { font-size: 22px; font-weight: 700; color: var(--gold-2); font-family: "Noto Serif SC", serif; }
+.bonus-unit { font-size: 11px; color: var(--ink-dim); }
+
+/* ===== 价格 + 购买区块 ===== */
+.buy-block {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px dashed rgba(233, 200, 120, .2);
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.buy-price {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 8px 16px; border-radius: 999px;
+  border: 1px solid rgba(233, 200, 120, .35);
+  background: rgba(233, 200, 120, .06);
+}
+.buy-icon {
+  display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center;
+  border-radius: 50%; font-size: 12px; align-self: center;
+  background: linear-gradient(135deg, var(--gold-2), var(--gold));
+  color: #0c1322; font-weight: 700;
+}
+.buy-val { font-size: 20px; font-weight: 700; color: var(--gold-2); font-family: "Noto Serif SC", serif; }
+.buy-unit { font-size: 12px; color: var(--ink-dim); }
+.buy-btn {
+  padding: 10px 22px; border-radius: 10px; cursor: pointer;
+  font-family: inherit; font-size: 15px; letter-spacing: 3px; color: #0c1322;
+  background: linear-gradient(135deg, var(--gold-2), var(--gold));
+  border: none; font-weight: 700;
+  transition: .2s;
+}
+.buy-btn:hover:not(:disabled) { box-shadow: 0 0 20px rgba(233, 200, 120, .5); transform: translateY(-1px); }
+.buy-btn:disabled { opacity: .5; cursor: not-allowed; }
+.buy-tip { width: 100%; font-size: 13px; color: var(--qi); letter-spacing: 1px; }
+
+@media (max-width: 640px) {
+  .bonus-grid { grid-template-columns: repeat(3, 1fr); }
+}
 
 /* ===== 同类法宝 ===== */
 .block { padding: 30px 28px 10px; max-width: 1080px; margin: 0 auto; }

@@ -84,45 +84,43 @@
 
           <div class="chips">
             <button
-              v-for="r in spiritRoots" :key="r" type="button"
-              class="chip" :class="{ active: spiritRoot === r, special: r.includes('变异') }"
-              @click="spiritRoot = r"
-            >{{ r }}</button>
+              v-for="r in spiritRoots" :key="r.name" type="button"
+              class="chip" :class="{ active: spiritRoot === r.name, special: r.name.includes('变异') }"
+              @click="spiritRoot = r.name"
+            >{{ r.name }}</button>
           </div>
 
-          <div class="field readonly">
+          <!-- 灵根加成：攻/防/速 -->
+          <div v-if="currentSpiritRoot" class="bonus-panel">
+            <div class="bonus-title">灵根 · {{ currentSpiritRoot.name }} 加成</div>
+            <div class="bonus-grid">
+              <span class="bonus-tag">攻击 +{{ currentSpiritRoot.atk }}</span>
+              <span class="bonus-tag">防御 +{{ currentSpiritRoot.def }}</span>
+              <span class="bonus-tag">速度 +{{ currentSpiritRoot.spd }}</span>
+            </div>
+          </div>
+
+          <div class="field">
             <span class="ico">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c3 4 6 6 6 10a6 6 0 0 1-12 0c0-4 3-6 6-10z"/></svg>
             </span>
             <select v-model="physique" :style="{ color: physiqueColor }" @change="onPhysiqueChange">
-              <option v-for="p in physiques" :key="p.name" :value="p.name" :disabled="p.name !== '凡人之躯'" :style="{ color: p.color }">
+              <option v-for="p in physiques" :key="p.name" :value="p.name" :style="{ color: p.color }">
                 {{ p.name }}
               </option>
             </select>
-            <span class="lock" title="体质由天命而定，凡人之躯不可更改">锁</span>
           </div>
 
-          <!-- 行囊：初始法宝 / 初始功法 -->
-          <div class="sec-title"><i></i>行囊</div>
-          <div class="duo">
-            <div class="field">
-              <select v-model="initialTreasure" :style="{ color: currentTreasureColor }">
-                <option v-for="t in treasures" :key="t.name" :value="t.name" :style="{ color: GRADE_COLOR[t.grade] }">
-                  法宝 · {{ t.name }}（{{ t.grade }}）
-                </option>
-              </select>
+          <!-- 体质加成：生命/寿元/攻/防/速 -->
+          <div v-if="physique" class="bonus-panel">
+            <div class="bonus-title">体质 · {{ currentPhysique.name }} 加成</div>
+            <div class="bonus-grid">
+              <span class="bonus-tag">生命 +{{ currentPhysique.hp }}</span>
+              <span class="bonus-tag life">寿元 +{{ currentPhysique.lifespan }}</span>
+              <span class="bonus-tag">攻击 +{{ currentPhysique.atk }}</span>
+              <span class="bonus-tag">防御 +{{ currentPhysique.def }}</span>
+              <span class="bonus-tag">速度 +{{ currentPhysique.spd }}</span>
             </div>
-            <div class="field">
-              <select v-model="initialGongfa" :style="{ color: currentGongfaColor }">
-                <option v-for="g in gongfas" :key="g.name" :value="g.name" :style="{ color: GRADE_COLOR[g.grade] }">
-                  功法 · {{ g.name }}（{{ g.grade }}）
-                </option>
-              </select>
-            </div>
-          </div>
-          <div class="grade-hint">
-            <span class="grade-tag" :style="{ color: currentTreasureColor, borderColor: currentTreasureColor }">法宝品阶 · {{ currentTreasure.grade }}</span>
-            <span class="grade-tag" :style="{ color: currentGongfaColor, borderColor: currentGongfaColor }">功法品阶 · {{ currentGongfa.grade }}</span>
           </div>
 
           <!-- 道号：账号/密码/验证码 -->
@@ -191,45 +189,25 @@ const auth = useAuthStore()
 // ===== 人物初始化选项（参考游戏捏人模块）=====
 const realm = '练气一层' // 修为：只读，系统初始
 
-// 修仙品阶 → 字体颜色（由凡入圣，逐级升色）
-const GRADE_COLOR = {
-  '凡品': '#9aa4b8',
-  '下品': '#6fcf97',
-  '中品': '#4aa3ff',
-  '上品': '#b48cff',
-  '极品': '#ffae42',
-  '灵宝': '#ff5c7c'
-}
-
-const spiritRoots = ['金灵根', '木灵根', '水灵根', '火灵根', '土灵根', '雷灵根·变异', '冰灵根·变异', '风灵根·变异']
-// 体质：仅「凡人之躯」可择，其余仅供观览天命，不可选
+// 灵根：名称 → 攻/防/速加成（与后端 SpiritRootEnum 一致）
+const spiritRoots = [
+  { name: '金灵根', atk: 10, def: 5, spd: 0 },
+  { name: '木灵根', atk: 0, def: 10, spd: 5 },
+  { name: '水灵根', atk: 5, def: 10, spd: 0 },
+  { name: '火灵根', atk: 15, def: 0, spd: 0 },
+  { name: '土灵根', atk: 5, def: 15, spd: 0 },
+  { name: '雷灵根·变异', atk: 20, def: 5, spd: 10 },
+  { name: '冰灵根·变异', atk: 10, def: 15, spd: 0 },
+  { name: '风灵根·变异', atk: 5, def: 0, spd: 20 }
+]
+// 体质：名称 → 生命/寿元/攻/防/速加成（与后端 PhysiqueEnum 一致）
 const physiques = [
-  { name: '凡人之躯', color: '#9aa4b8' },
-  { name: '先天道体', color: '#ffd56b' },
-  { name: '太阴之体', color: '#7fd4ff' },
-  { name: '纯阳之体', color: '#ff7a6b' },
-  { name: '九幽玄阴体', color: '#b48cff' },
-  { name: '风灵体质', color: '#6fcf97' }
-]
-// 初始法宝（标注品阶）
-const treasures = [
-  { name: '青竹蜂云剑', grade: '上品' },
-  { name: '金光砖', grade: '中品' },
-  { name: '昊阳镜', grade: '上品' },
-  { name: '飞云盾', grade: '中品' },
-  { name: '龙渊匕', grade: '下品' },
-  { name: '储物袋', grade: '凡品' },
-  { name: '聚灵幡', grade: '中品' },
-  { name: '赤炎珠', grade: '下品' }
-]
-// 初始功法（标注品阶）
-const gongfas = [
-  { name: '长春功', grade: '下品' },
-  { name: '青元剑诀', grade: '极品' },
-  { name: '大衍诀', grade: '极品' },
-  { name: '明王诀', grade: '上品' },
-  { name: '清风诀', grade: '凡品' },
-  { name: '驱物术', grade: '凡品' }
+  { name: '凡人之躯', color: '#9aa4b8', hp: 0, lifespan: 0, atk: 0, def: 0, spd: 0 },
+  { name: '先天道体', color: '#ffd56b', hp: 200, lifespan: 50, atk: 10, def: 10, spd: 5 },
+  { name: '太阴之体', color: '#7fd4ff', hp: 150, lifespan: 30, atk: 15, def: 5, spd: 0 },
+  { name: '纯阳之体', color: '#ff7a6b', hp: 150, lifespan: 30, atk: 10, def: 10, spd: 0 },
+  { name: '九幽玄阴体', color: '#b48cff', hp: 250, lifespan: 80, atk: 20, def: 15, spd: 5 },
+  { name: '风灵体质', color: '#6fcf97', hp: 100, lifespan: 20, atk: 5, def: 5, spd: 20 }
 ]
 
 // ===== 表单状态 =====
@@ -245,10 +223,8 @@ const loading = ref(false)
 const gender = ref('')                       // '' | '男' | '女'
 const avatar = ref('')                       // 'avatar:male-1'…或上传的 dataURL
 const age = ref(null)
-const spiritRoot = ref('')
-const physique = ref(physiques[0].name)
-const initialTreasure = ref(treasures[0].name)
-const initialGongfa = ref(gongfas[0].name)
+const spiritRoot = ref('')                   // 选中的灵根名称
+const physique = ref(physiques[0].name)      // 选中的体质名称
 
 const toastMsg = ref('')
 const toastVisible = ref(false)
@@ -271,12 +247,10 @@ const currentPoster = computed(() => {
   return null
 })
 
-// 当前法宝/功法/体质的展示色与品阶（驱动下拉字色与标签）
-const currentTreasure = computed(() => treasures.find(t => t.name === initialTreasure.value) || treasures[0])
-const currentTreasureColor = computed(() => GRADE_COLOR[currentTreasure.value.grade])
-const currentGongfa = computed(() => gongfas.find(g => g.name === initialGongfa.value) || gongfas[0])
-const currentGongfaColor = computed(() => GRADE_COLOR[currentGongfa.value.grade])
-const physiqueColor = computed(() => (physiques.find(p => p.name === physique.value) || physiques[0]).color)
+// 当前体质/灵根的展示色与加成（驱动下拉字色与加成展示）
+const currentPhysique = computed(() => physiques.find(p => p.name === physique.value) || physiques[0])
+const physiqueColor = computed(() => currentPhysique.value.color)
+const currentSpiritRoot = computed(() => spiritRoots.find(r => r.name === spiritRoot.value) || null)
 
 onMounted(() => {
   const saved = localStorage.getItem('fx_user')
@@ -309,9 +283,12 @@ function pickGender(g) {
   }
 }
 
-// 体质：仅「凡人之躯」可择，强行择他者即时复位
+// 体质：仅「凡人之躯」可择定，其余仅供观览天命。下拉可展开查看，但选定其他体质即时复位
 function onPhysiqueChange() {
-  if (physique.value !== '凡人之躯') physique.value = '凡人之躯'
+  if (physique.value !== '凡人之躯') {
+    show('天命未至，体质暂不可改，仅凡人之躯可择')
+    physique.value = '凡人之躯'
+  }
 }
 
 // 上传头像：本地压缩为 128×128 JPEG dataURL（避免超大图入库）
@@ -363,9 +340,7 @@ async function onSubmit() {
       age: n,
       spiritRoot: spiritRoot.value,
       physique: physique.value,
-      avatar: avatar.value,
-      initialTreasure: initialTreasure.value,
-      initialGongfa: initialGongfa.value
+      avatar: avatar.value
     })
     show('入门已成 · 请以此道号登录')
     setTimeout(() => router.push('/login'), 1200)
@@ -519,16 +494,23 @@ onUnmounted(() => clearTimeout(toastTimer))
 .chip.special{border-style:dashed}
 .chip.special.active{color:var(--violet);border-color:rgba(139,109,255,.6);background:rgba(139,109,255,.08);box-shadow:0 0 14px rgba(139,109,255,.25)}
 
+/* 灵根/体质加成面板 */
+.bonus-panel{
+  margin:-6px 0 18px;padding:12px 14px;border-radius:12px;
+  border:1px solid rgba(103,232,249,.22);background:rgba(103,232,249,.05);
+  animation:fadeIn .3s ease both;
+}
+.bonus-title{font-size:12.5px;letter-spacing:2px;color:var(--qi);margin-bottom:9px;font-weight:600}
+.bonus-grid{display:flex;flex-wrap:wrap;gap:7px}
+.bonus-tag{
+  font-size:12px;letter-spacing:1px;padding:4px 10px;border-radius:999px;
+  color:var(--ink);border:1px solid rgba(103,232,249,.35);background:rgba(103,232,249,.08);
+}
+.bonus-tag.life{color:#ffd56b;border-color:rgba(255,213,107,.4);background:rgba(255,213,107,.08)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
 /* 双列下拉 */
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-
-/* 品阶标签 */
-.grade-hint{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 4px}
-.grade-tag{
-  font-size:12px;letter-spacing:2px;padding:5px 12px;border-radius:999px;
-  border:1px solid var(--line);background:rgba(255,255,255,.03);
-  transition:color .25s,border-color .25s;
-}
 
 /* 输入域（沿用原风格） */
 .field{position:relative;margin-bottom:18px}
@@ -591,6 +573,5 @@ onUnmounted(() => clearTimeout(toastTimer))
   .poster-caption{padding:24px 24px 18px}
   .poster-side .foot{padding:0 24px 18px}
   .form-side{overflow:visible;padding:28px 24px}
-  .duo{grid-template-columns:1fr}
 }
 </style>

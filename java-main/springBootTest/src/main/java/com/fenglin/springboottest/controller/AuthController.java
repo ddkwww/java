@@ -1,5 +1,6 @@
 package com.fenglin.springboottest.controller;
 
+import com.fenglin.springboottest.config.TokenStore;
 import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
@@ -12,6 +13,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
@@ -39,11 +41,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AuthController {
 
     private final UserRepository userRepository;
+    private final TokenStore tokenStore;
 
     /** captchaId -> 验证码条目（含过期时间） */
     private final ConcurrentHashMap<String, CaptchaEntry> captchaStore = new ConcurrentHashMap<>();
-    /** token -> 用户名，内存态会话表（重启即失效，适合本地演示） */
-    private final ConcurrentHashMap<String, String> tokenStore = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
 
     private static final String CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去除易混字符 0/O/1/I/L
@@ -53,8 +54,9 @@ public class AuthController {
     /** 头像字段最大长度（默认键名或 128×128 JPEG dataURL，约 50KB 内；超长视为超大图拒绝） */
     private static final int AVATAR_MAX_LEN = 300 * 1024;
 
-    public AuthController(UserRepository userRepository) {
+    public AuthController(UserRepository userRepository, TokenStore tokenStore) {
         this.userRepository = userRepository;
+        this.tokenStore = tokenStore;
     }
 
     /** 启动后打印联调地址，并播种管理员账号，方便前端对接 */
@@ -76,7 +78,8 @@ public class AuthController {
     /**
      * 数据初始化：
      * 1) 历史存在 permission 为 NULL 的用户回补为 1（默认普通用户）；
-     * 2) 若不存在任何管理员(permission=0)，自动播种 admin / admin123（明文）。
+     * 2) 密码统一迁移为 SHA-256 哈希（历史明文密码自动转哈希，已哈希的不变）；
+     * 3) 若不存在任何管理员(permission=0)，自动播种 admin / admin123（哈希存储）。
      */
     private void seedAdmin() {
         try {
@@ -84,16 +87,59 @@ public class AuthController {
                 u.setPermission(1);
                 userRepository.save(u);
             }
+            // 密码迁移：仅当存的是明文（非 64 位十六进制）才哈希化
+            migratePasswords();
             if (!userRepository.existsByPermission(0)) {
                 User admin = new User();
                 admin.setUsername("admin");
-                admin.setPassword("admin123"); // 明文存储
+                admin.setPassword(sha256("admin123"));
                 admin.setPermission(0);
                 userRepository.save(admin);
                 System.out.println("[Auth] 已自动播种管理员账号：admin / admin123");
             }
         } catch (Exception e) {
             System.out.println("[Auth] 管理员播种失败（请检查数据库）：" + e.getMessage());
+        }
+    }
+
+    /** 将库中明文密码迁移为 SHA-256 哈希（幂等：已是哈希的跳过） */
+    private void migratePasswords() {
+        try {
+            int migrated = 0;
+            for (User u : userRepository.findAll()) {
+                String pwd = u.getPassword();
+                if (pwd == null || pwd.isEmpty()) continue;
+                if (isHashed(pwd)) continue; // 已是哈希
+                u.setPassword(sha256(pwd));
+                userRepository.save(u);
+                migrated++;
+            }
+            if (migrated > 0) {
+                System.out.println("[Auth] 已迁移 " + migrated + " 个明文密码为 SHA-256 哈希。");
+            }
+        } catch (Exception e) {
+            System.out.println("[Auth] 密码迁移失败：" + e.getMessage());
+        }
+    }
+
+    /** 判断是否为 64 位十六进制 SHA-256 哈希 */
+    private static boolean isHashed(String s) {
+        return s.length() == 64 && s.matches("[0-9a-fA-F]{64}");
+    }
+
+    /** SHA-256 哈希（输出小写十六进制） */
+    private static String sha256(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            // 理论上不会发生；兜底返回原文
+            return input;
         }
     }
 
@@ -165,10 +211,10 @@ public class AuthController {
                     .body(Map.of("message", "用户名已存在"));
         }
 
-        // 5) 落库（按需求密码以明文存储，注册用户默认权限=1 普通用户）
+        // 5) 落库（密码 SHA-256 哈希存储，注册用户默认权限=1 普通用户）
         User user = new User();
         user.setUsername(username.trim());
-        user.setPassword(password);
+        user.setPassword(sha256(password));
         user.setPermission(1);
         user.setGender(gender);
         user.setAge(age);
@@ -178,6 +224,10 @@ public class AuthController {
         user.setInitialTreasure(trimToNull(initialTreasure));
         user.setInitialGongfa(trimToNull(initialGongfa));
         user.setRealm("练气一层"); // 修为系统初始，只读不可修改
+        user.setTotalLevel(1);      // 修为总层数初始
+        user.setSpiritStone(0);     // 初始灵石（0，靠修炼/挖矿/除妖获取）
+        user.setSpiritQi(0);        // 初始灵气（0，靠打坐/除妖获取）
+        user.setAgeUsed(0);         // 初始已耗天数（寿元流逝从零起）
         userRepository.save(user);
 
         String token = issueToken(user.getUsername());
@@ -194,7 +244,7 @@ public class AuthController {
         }
 
         User user = userRepository.findByUsername(username.trim()).orElse(null);
-        if (user == null || !password.equals(user.getPassword())) {
+        if (user == null || !sha256(password).equals(user.getPassword())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "用户名或密码错误"));
         }
@@ -213,7 +263,7 @@ public class AuthController {
         }
 
         User user = userRepository.findByUsername(username.trim()).orElse(null);
-        if (user == null || !password.equals(user.getPassword())) {
+        if (user == null || !sha256(password).equals(user.getPassword())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "用户名或密码错误"));
         }
@@ -230,11 +280,11 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<?> me(@RequestHeader(value = "Authorization", required = false) String auth) {
         String token = parseToken(auth);
-        if (token == null || !tokenStore.containsKey(token)) {
+        if (token == null || !tokenStore.contains(token)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "未登录或登录已失效"));
         }
-        String username = tokenStore.get(token);
+        String username = tokenStore.getUsername(token);
         User u = userRepository.findByUsername(username).orElse(null);
         Map<String, Object> profile = new HashMap<>(12);
         profile.put("username", username);
@@ -250,6 +300,9 @@ public class AuthController {
             profile.put("initialGongfa", u.getInitialGongfa());
             profile.put("realm", u.getRealm() != null ? u.getRealm() : "练气一层");
             profile.put("level", 1);
+            profile.put("spiritStone", u.getSpiritStone() != null ? u.getSpiritStone() : 0);
+            profile.put("spiritQi", u.getSpiritQi() != null ? u.getSpiritQi() : 0);
+            profile.put("ageUsed", u.getAgeUsed() != null ? u.getAgeUsed() : 0);
         } else {
             profile.put("realm", "练气期");
             profile.put("level", 1);

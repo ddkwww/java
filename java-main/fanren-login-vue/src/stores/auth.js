@@ -13,6 +13,8 @@ export const useAuthStore = defineStore('auth', () => {
   // 权限：0=管理员，1=默认(普通用户)；未登录时默认 1（看不到后台入口）
   const permission = ref(localStorage.getItem('fx_permission') != null ? Number(localStorage.getItem('fx_permission')) : 1)
   const profile = ref(null)
+  // 灵石余额（全局共享，导航栏实时显示；由 /api/me 或经济操作后同步）
+  const spiritStone = ref(0)
 
   async function login(username, password, { remember = true } = {}) {
     const data = await loginApi(username, password)
@@ -54,7 +56,13 @@ export const useAuthStore = defineStore('auth', () => {
       permission.value = perm
       localStorage.setItem('fx_permission', String(perm))
     }
+    if (data.spiritStone != null) spiritStone.value = Number(data.spiritStone)
     return data
+  }
+
+  // 直接设置灵石余额（经济操作后同步，触发导航栏实时更新）
+  function setSpiritStone(v) {
+    spiritStone.value = Number(v) || 0
   }
 
   function logout() {
@@ -62,10 +70,11 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = ''
     profile.value = null
     permission.value = 1
+    spiritStone.value = 0
     localStorage.removeItem('fx_token')
     localStorage.removeItem('fx_user')
     localStorage.removeItem('fx_permission')
   }
 
-  return { token, user, permission, profile, login, adminLogin, register, fetchProfile, logout }
+  return { token, user, permission, profile, spiritStone, login, adminLogin, register, fetchProfile, setSpiritStone, logout }
 })
