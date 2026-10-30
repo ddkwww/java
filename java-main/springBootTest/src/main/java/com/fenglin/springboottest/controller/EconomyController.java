@@ -154,6 +154,7 @@ public class EconomyController {
         int qi = u.getSpiritQi() != null ? u.getSpiritQi() : 0;
         u.setSpiritQi(qi + MEDITATE_QI_REWARD);
         u.setAgeUsed(nz(u.getAgeUsed()) + MEDITATE_DAY_COST);
+        CharacterStatsService.refreshLifespan(u);
         u.setLastMeditateAt(LocalDateTime.now());
         userRepository.save(u);
 
@@ -191,6 +192,7 @@ public class EconomyController {
         u.setSpiritQi(qi + HUNT_QI_REWARD);
         u.setSpiritStone(stones + HUNT_STONE_REWARD);
         u.setAgeUsed(nz(u.getAgeUsed()) + HUNT_DAY_COST);
+        CharacterStatsService.refreshLifespan(u);
         u.setLastHuntAt(LocalDateTime.now());
         userRepository.save(u);
 
@@ -228,6 +230,7 @@ public class EconomyController {
         int stones = u.getSpiritStone() != null ? u.getSpiritStone() : 0;
         u.setSpiritStone(stones + MINE_STONE_REWARD);
         u.setAgeUsed(nz(u.getAgeUsed()) + MINE_DAY_COST);
+        CharacterStatsService.refreshLifespan(u);
         u.setLastMineAt(LocalDateTime.now());
         userRepository.save(u);
 

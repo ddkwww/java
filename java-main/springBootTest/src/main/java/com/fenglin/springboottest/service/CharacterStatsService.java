@@ -172,7 +172,8 @@ public class CharacterStatsService {
 
         Map<String, Integer> total = new LinkedHashMap<>();
         total.put("hp", realm.get("hp") + phys.get("hp") + manu.get("hp") + treas.get("hp"));
-        total.put("lifespan", realm.get("lifespan") + phys.get("lifespan") + manu.get("lifespan") + treas.get("lifespan"));
+        // 寿元：直接使用数据库持久化的 lifespan 字段，与剩余寿元完全同步
+        total.put("lifespan", remainingLifespan(user));
         total.put("atk", realm.get("atk") + root.get("atk") + phys.get("atk") + manu.get("atk") + treas.get("atk"));
         total.put("def", realm.get("def") + root.get("def") + phys.get("def") + manu.get("def") + treas.get("def"));
         total.put("spd", realm.get("spd") + root.get("spd") + phys.get("spd") + manu.get("spd") + treas.get("spd"));
@@ -203,22 +204,40 @@ public class CharacterStatsService {
 
     /**
      * 计算角色「剩余寿元」（年），用于修炼操作与寿元挂钩。
-     * 剩余寿元 = 境界寿元上限 + 体质寿元加成 - 年龄 - 已消耗天数折算年数（每 365 天折 1 年）。
-     * 年龄取自 user.age（注册时填写），已消耗天数取自 user.ageUsed；结果归零下限。
+     * 优先返回数据库持久化的 lifespan 字段；若为 null（老数据），动态计算（不修改 user 对象）。
      *
-     * @param user 角色（含修为总层数、体质、年龄、已消耗天数）
+     * @param user 角色（含修为总层数、体质、已消耗天数、lifespan）
      * @return 剩余寿元（年，向下取整，最少 0）
      */
     public static int remainingLifespan(User user) {
+        if (user.getLifespan() != null) return user.getLifespan();
+        // 兼容老数据：动态计算（只读，不修改 user 对象）
         int totalLevel = user.getTotalLevel() != null ? user.getTotalLevel() : 1;
         int realmIdx = RealmEnum.realmLevelOfTotal(totalLevel);
         RealmEnum realm = RealmEnum.of(realmIdx);
         int cap = realm != null ? realm.getLifespan() : 0;
         int physBonus = physiqueBonus(user.getPhysique()).get("lifespan");
-        int age = user.getAge() != null ? user.getAge() : 0;
         int ageUsed = user.getAgeUsed() != null ? user.getAgeUsed() : 0;
         int years = (int) Math.floor(ageUsed / 365.0);
-        return Math.max(0, cap + physBonus - age - years);
+        return Math.max(0, cap + physBonus - years);
+    }
+
+    /**
+     * 根据当前境界、体质、已消耗天数，重新计算并设置用户的 lifespan 字段。
+     * 公式：lifespan = 境界寿元上限 + 体质寿元加成 - floor(ageUsed / 365)。
+     * 在每次消耗天数（打坐/除妖/挖矿/突破）后调用，保持寿元与消耗同步。
+     *
+     * @param user 角色（将被修改 lifespan 字段）
+     */
+    public static void refreshLifespan(User user) {
+        int totalLevel = user.getTotalLevel() != null ? user.getTotalLevel() : 1;
+        int realmIdx = RealmEnum.realmLevelOfTotal(totalLevel);
+        RealmEnum realm = RealmEnum.of(realmIdx);
+        int cap = realm != null ? realm.getLifespan() : 0;
+        int physBonus = physiqueBonus(user.getPhysique()).get("lifespan");
+        int ageUsed = user.getAgeUsed() != null ? user.getAgeUsed() : 0;
+        int years = (int) Math.floor(ageUsed / 365.0);
+        user.setLifespan(Math.max(0, cap + physBonus - years));
     }
 
     /** 根据境界名称取序号，未知回退 1 */

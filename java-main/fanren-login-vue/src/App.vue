@@ -18,8 +18,7 @@
         <a :class="{ active: isSutras }" @click.prevent="goSutras">藏经阁</a>
         <a :class="{ active: isTreasures }" @click.prevent="goTreasures">法宝</a>
         <a :class="{ active: isStats }" @click.prevent="goStats">修为</a>
-        <a :class="{ active: activeAnchor === 'cave' }" @click.prevent="scrollTo('cave')">洞府</a>
-        <a :class="{ active: activeAnchor === 'dao' }" @click.prevent="scrollTo('dao')">论道</a>
+        <a :class="{ active: isSects }" @click.prevent="goSects">门派</a>
       </nav>
 
       <!-- 后台管理系统入口：仅管理员(permission=0)可见 -->
@@ -29,7 +28,7 @@
         <span class="stone-chip" title="灵石" @click="goStats">
           <i class="stone-dot">灵</i>{{ auth.spiritStone }}
         </span>
-        <span class="user-chip" @click="scrollTo('cave')">
+        <span class="user-chip" @click="goStats">
           <i class="dot"></i>{{ auth.user || '无名' }} · {{ auth.profile?.realm || '炼气' }}
         </span>
         <button class="btn-exit" @click="onLogout" title="退出登录">退归山林</button>
@@ -62,6 +61,7 @@ const isHome = computed(() => route.name === 'home')
 const isSutras = computed(() => route.name === 'sutras' || route.name === 'manual')
 const isTreasures = computed(() => route.name === 'treasures' || route.name === 'treasure')
 const isStats = computed(() => route.name === 'stats')
+const isSects = computed(() => route.name === 'sects')
 
 const activeAnchor = ref('')
 
@@ -69,6 +69,7 @@ function goHome() { router.push('/') }
 function goSutras() { router.push('/sutras') }
 function goTreasures() { router.push('/treasures') }
 function goStats() { router.push('/stats') }
+function goSects() { router.push('/sects') }
 function goAdmin() { router.push('/admin/login') }
 
 function onBrand() {
@@ -81,31 +82,15 @@ function onLogout() {
   router.push('/login')
 }
 
-// 锚点滚动：洞府 / 论道 仅首页存在；非首页先回首页再滚动
+// 锚点滚动：仅首页顶部
 function scrollTo(id) {
   if (id === 'top') {
     document.getElementById('top')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    return
   }
-  if (!isHome.value) {
-    router.push('/').then(() =>
-      setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 360)
-    )
-    return
-  }
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-// 首页滚动高亮：洞府 / 论道
 function onScroll() {
-  if (!isHome.value) { activeAnchor.value = ''; return }
-  const probe = window.innerHeight * 0.35
-  let cur = ''
-  for (const id of ['cave', 'dao']) {
-    const el = document.getElementById(id)
-    if (el && el.getBoundingClientRect().top <= probe) cur = id
-  }
-  activeAnchor.value = cur
+  activeAnchor.value = ''
 }
 
 onMounted(async () => {

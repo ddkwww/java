@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -91,6 +93,8 @@ public class StatsController {
         u.setSpiritStone(stones - cost);
         u.setSpiritQi(qi - qiCost);
         u.setAgeUsed(ageUsed + dayCost);
+        // 突破后刷新持久化的 lifespan（境界提升可能增加寿元上限）
+        CharacterStatsService.refreshLifespan(u);
         // 同步可读境界名，保持与历史字段一致
         u.setRealm(RealmEnum.fullName(next));
         userRepository.save(u);
@@ -136,15 +140,30 @@ public class StatsController {
         panel.put("spiritQi", u.getSpiritQi() != null ? u.getSpiritQi() : 0);
         panel.put("age", u.getAge() != null ? u.getAge() : 0);
         panel.put("ageUsed", u.getAgeUsed() != null ? u.getAgeUsed() : 0);
-        panel.put("remainingLifespan", CharacterStatsService.remainingLifespan(u));
+        int remaining = CharacterStatsService.remainingLifespan(u);
+        panel.put("remainingLifespan", remaining);
         panel.put("breakthroughCost", RealmEnum.breakthroughCost(
                 u.getTotalLevel() != null ? u.getTotalLevel() : 1));
         panel.put("breakthroughQiCost", RealmEnum.breakthroughQiCost(
                 u.getTotalLevel() != null ? u.getTotalLevel() : 1));
         panel.put("breakthroughDayCost", RealmEnum.breakthroughDayCost(
                 u.getTotalLevel() != null ? u.getTotalLevel() : 1));
+
+        // 五维「寿元」与剩余寿元均来自数据库 lifespan 字段（compute 中已同步），无需额外覆盖
         panel.putAll(stats);
+
+        // 资源获取冷却剩余秒数（供前端刷新后恢复倒计时，不丢）
+        panel.put("meditateCd", cooldownRemaining(u.getLastMeditateAt(), 60));
+        panel.put("huntCd", cooldownRemaining(u.getLastHuntAt(), 300));
+        panel.put("mineCd", cooldownRemaining(u.getLastMineAt(), 300));
         return panel;
+    }
+
+    /** 计算某操作剩余的冷却秒数（从未操作过返回 0） */
+    private long cooldownRemaining(LocalDateTime lastAt, int cooldownSec) {
+        if (lastAt == null) return 0;
+        long elapsed = Duration.between(lastAt, LocalDateTime.now()).getSeconds();
+        return Math.max(0, cooldownSec - elapsed);
     }
 
     private String parseToken(String auth) {

@@ -208,6 +208,10 @@ async function load() {
   try {
     stats.value = await getStats()
     if (stats.value.spiritStone != null) auth.setSpiritStone(stats.value.spiritStone)
+    // 恢复后端记录的冷却倒计时（刷新后不丢失）
+    meditateCd.value = Math.max(0, Math.floor(Number(stats.value.meditateCd) || 0))
+    huntCd.value = Math.max(0, Math.floor(Number(stats.value.huntCd) || 0))
+    mineCd.value = Math.max(0, Math.floor(Number(stats.value.mineCd) || 0))
   } catch (e) {
     tip.value = e.message || '推演失败'
   } finally {
@@ -290,8 +294,7 @@ async function onMine() {
 }
 
 // 统一应用获取结果：同步灵石/灵气/天数/寿元
-// 优先使用后端回传的精确值（ageUsed / remainingLifespan），
-// 二者与寿元公式一致：消耗天数越多，剩余寿元越少（消耗即减去对应寿元）。
+// 五维寿元与剩余寿元均来自后端同一字段，点击后立即同步，无需刷新
 function applyEarn(data) {
   if (data.spiritStone != null) {
     stats.value.spiritStone = data.spiritStone
@@ -299,7 +302,11 @@ function applyEarn(data) {
   }
   if (data.spiritQi != null) stats.value.spiritQi = data.spiritQi
   if (data.ageUsed != null) stats.value.ageUsed = data.ageUsed
-  if (data.remainingLifespan != null) stats.value.remainingLifespan = data.remainingLifespan
+  if (data.remainingLifespan != null) {
+    stats.value.remainingLifespan = data.remainingLifespan
+    // 五维寿元同步更新（与剩余寿元保持一致）
+    stats.value.total = { ...stats.value.total, lifespan: data.remainingLifespan }
+  }
 }
 
 function goBack() {

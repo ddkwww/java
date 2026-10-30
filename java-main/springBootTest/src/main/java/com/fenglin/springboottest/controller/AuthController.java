@@ -228,6 +228,7 @@ public class AuthController {
         user.setSpiritStone(0);     // 初始灵石（0，靠修炼/挖矿/除妖获取）
         user.setSpiritQi(0);        // 初始灵气（0，靠打坐/除妖获取）
         user.setAgeUsed(0);         // 初始已耗天数（寿元流逝从零起）
+        user.setLifespan(100);      // 初始剩余寿元（凡人/练气期寿元上限=100）
         userRepository.save(user);
 
         String token = issueToken(user.getUsername());

@@ -132,7 +132,6 @@ const auth = useAuthStore()
 const manual = ref(null)
 const loading = ref(true)
 const related = ref([])
-const sourceNote = ref('')
 const buying = ref(false)
 const buyTip = ref('')
 
@@ -151,13 +150,10 @@ async function load(id) {
   loading.value = true
   manual.value = null
   related.value = []
-  sourceNote.value = ''
-  const { manual: m, source } = await fetchManualDetail(id)
+  const { manual: m } = await fetchManualDetail(id)
   manual.value = m
   loading.value = false
   if (m) {
-    sourceNote.value =
-      source === 'remote' ? '' : source === 'fallback' ? '（后端未连，暂阅本地藏经）' : '（本地藏经模式）'
     // 同脉功法：按分类取同门，排除自身，最多 6 卷
     const res = await fetchManuals({ category: m.category })
     related.value = (res.items || [])

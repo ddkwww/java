@@ -73,6 +73,10 @@ public class User {
     @Column(name = "age_used", columnDefinition = "int default 0")
     private Integer ageUsed = 0;
 
+    /** 剩余寿元（年，持久化字段）。五维寿元与顶部剩余寿元均读此字段，保证同步 */
+    @Column(name = "lifespan", columnDefinition = "int default 100")
+    private Integer lifespan = 100;
+
     /** 打坐修炼最后获取时间（冷却用） */
     @Column(name = "last_meditate_at")
     private LocalDateTime lastMeditateAt;
@@ -84,6 +88,18 @@ public class User {
     /** 挖矿最后获取灵石时间（冷却用） */
     @Column(name = "last_mine_at")
     private LocalDateTime lastMineAt;
+
+    /** 所属门派名（对应 t_sect.name，null 表示未加入） */
+    @Column(length = 64)
+    private String sect;
+
+    /** 弟子级别：外门弟子 / 内门弟子 / 真传弟子（按修为境界自动判定） */
+    @Column(name = "sect_rank", length = 16)
+    private String sectRank;
+
+    /** 最后领取月俸时间（按月冷却用） */
+    @Column(name = "last_salary_at")
+    private LocalDateTime lastSalaryAt;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -221,6 +237,14 @@ public class User {
         this.ageUsed = ageUsed;
     }
 
+    public Integer getLifespan() {
+        return lifespan;
+    }
+
+    public void setLifespan(Integer lifespan) {
+        this.lifespan = lifespan;
+    }
+
     public LocalDateTime getLastMineAt() {
         return lastMineAt;
     }
@@ -243,6 +267,30 @@ public class User {
 
     public void setLastHuntAt(LocalDateTime lastHuntAt) {
         this.lastHuntAt = lastHuntAt;
+    }
+
+    public String getSect() {
+        return sect;
+    }
+
+    public void setSect(String sect) {
+        this.sect = sect;
+    }
+
+    public String getSectRank() {
+        return sectRank;
+    }
+
+    public void setSectRank(String sectRank) {
+        this.sectRank = sectRank;
+    }
+
+    public LocalDateTime getLastSalaryAt() {
+        return lastSalaryAt;
+    }
+
+    public void setLastSalaryAt(LocalDateTime lastSalaryAt) {
+        this.lastSalaryAt = lastSalaryAt;
     }
 
     public LocalDateTime getCreatedAt() {

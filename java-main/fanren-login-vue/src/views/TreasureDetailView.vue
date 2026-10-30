@@ -132,7 +132,6 @@ const auth = useAuthStore()
 const treasure = ref(null)
 const loading = ref(true)
 const related = ref([])
-const sourceNote = ref('')
 const buying = ref(false)
 const buyTip = ref('')
 
@@ -156,13 +155,10 @@ async function load(id) {
   loading.value = true
   treasure.value = null
   related.value = []
-  sourceNote.value = ''
-  const { treasure: t, source } = await fetchTreasureDetail(id)
+  const { treasure: t } = await fetchTreasureDetail(id)
   treasure.value = t
   loading.value = false
   if (t) {
-    sourceNote.value =
-      source === 'remote' ? '' : source === 'fallback' ? '（后端未连，暂阅本地藏经）' : '（本地藏经模式）'
     // 同类法宝：按类别取同门，排除自身，最多 6 件
     const res = await fetchTreasures({ category: t.category })
     related.value = (res.items || [])

@@ -27,8 +27,6 @@
           <span class="hot-label">热门：</span>
           <a v-for="k in hotKeys" :key="k" @click.prevent="quickSearch(k)">{{ k }}</a>
         </div>
-
-        <div v-if="sourceNote" class="source-note">{{ sourceNote }}</div>
       </section>
 
       <!-- ===== 列表（功法 / 法宝 共用） ===== -->
@@ -149,7 +147,6 @@ const facets = reactive({ categories: [], realms: [], grades: [] })
 const activeCategory = ref('全部')
 const activeGrade = ref('全部')
 const activeRealm = ref('全部')
-const sourceNote = ref('')
 const searchStamp = ref(0)
 const shell = ref(null)
 
@@ -182,13 +179,6 @@ function priceOf(it) {
   return Math.round(pool * coef)
 }
 
-function setSourceNote(source) {
-  sourceNote.value =
-    source === 'remote' ? ''
-      : source === 'fallback' ? '（后端未连，暂阅本地藏经）'
-      : '（本地藏经模式）'
-}
-
 async function loadFacets() {
   if (isTreasure.value) {
     const tf = await fetchTreasureFacets()
@@ -203,6 +193,12 @@ async function loadFacets() {
   }
 }
 
+function goDetail(id) {
+  router.push(isTreasure.value
+    ? { name: 'treasure', params: { id } }
+    : { name: 'manual', params: { id } })
+}
+
 async function loadItems() {
   const params = {
     category: activeCategory.value,
@@ -213,11 +209,9 @@ async function loadItems() {
   if (isTreasure.value) {
     const res = await fetchTreasures(params)
     items.value = res.items
-    setSourceNote(res.source)
   } else {
     const res = await fetchManuals(params)
     items.value = res.items
-    setSourceNote(res.source)
   }
   searchStamp.value++
 }
@@ -228,12 +222,6 @@ function onSearch() {
 function quickSearch(k) {
   keyword.value = k
   onSearch()
-}
-
-function goDetail(id) {
-  router.push(isTreasure.value
-    ? { name: 'treasure', params: { id } }
-    : { name: 'manual', params: { id } })
 }
 
 onMounted(async () => {

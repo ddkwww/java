@@ -72,26 +72,6 @@
         </div>
       </section>
 
-      <!-- ===== 洞府（道友信息） ===== -->
-      <section class="block cave" id="cave">
-        <h2 class="block-title"><i class="orn"></i>洞府<i class="orn r"></i></h2>
-        <div class="cave-card">
-          <div class="seal">藏</div>
-          <div class="cave-info">
-            <p class="dao-name">道友 <b>{{ auth.user || '无名' }}</b></p>
-            <p class="realm">当前境界 · <b>{{ auth.profile?.realm || '炼气' }}</b></p>
-            <p class="cave-desc">洞府灵气充裕，可安心打坐修炼。仙途漫漫，道友且行且惜。</p>
-          </div>
-          <button class="btn-exit big" @click="onLogout">退归山林</button>
-        </div>
-      </section>
-
-      <!-- ===== 论道（页脚） ===== -->
-      <footer class="footer" id="dao">
-        <i class="orn"></i>
-        <p>仙路争锋 · 逆天改命 —— 凡人修仙传</p>
-        <p class="footer-dim">藏经阁 · 演示前端（后端接口：/api/manuals · /api/manuals/facets）</p>
-      </footer>
     </div>
   </div>
 </template>
