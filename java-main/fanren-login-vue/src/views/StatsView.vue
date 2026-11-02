@@ -143,12 +143,31 @@
         </section>
 
         <!-- 境界寿元上限 -->
-        <p class="lifespan-note">当前境界寿元上限 <em>{{ stats.lifespanCap }}</em> 年</p>
+        <p class="lifespan-note">寿元上限 <em>{{ stats.lifespanCap }}</em> 年</p>
       </div>
 
       <!-- 提示条 -->
       <p v-if="tip" class="tip">{{ tip }}</p>
     </div>
+
+    <!-- 境界突破动画 + 属性提升 -->
+    <BreakthroughFX
+      :visible="fxVisible"
+      :before="fxBefore"
+      :after="fxAfter"
+      :attr-list="attrList"
+      :new-realm="fxRealm"
+      @close="fxVisible = false"
+    />
+
+    <!-- 修炼动作（打坐/斩妖/矿脉）反馈动画 -->
+    <ActionFX
+      :visible="actionFx.visible"
+      :type="actionFx.type"
+      :qi-reward="actionFx.qiReward"
+      :stone-reward="actionFx.stoneReward"
+      @close="actionFx.visible = false"
+    />
   </div>
 </template>
 
@@ -157,6 +176,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getStats, breakthrough, earnMeditate, earnHunt, earnMine } from '../api/stats'
 import { useAuthStore } from '../stores/auth'
+import BreakthroughFX from '../components/BreakthroughFX.vue'
+import ActionFX from '../components/ActionFX.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -168,6 +189,13 @@ const meditateCd = ref(0)
 const huntCd = ref(0)
 const mineCd = ref(0)
 let cdTimer = null
+// 境界突破动画与属性提升遮罩
+const fxVisible = ref(false)
+const fxBefore = ref({})   // 突破前五维旧值
+const fxAfter = ref({})    // 突破后五维新值
+const fxRealm = ref('')    // 突破后新境界名
+// 修炼动作（打坐/斩妖/矿脉）反馈动画
+const actionFx = ref({ visible: false, type: '', qiReward: 0, stoneReward: 0 })
 const stats = ref({
   username: '', fullRealm: '', realm: '', stage: '', totalLevel: 1,
   lifespanCap: 0, spiritStone: 0, spiritQi: 0, age: 0, ageUsed: 0, remainingLifespan: 0,
@@ -223,6 +251,7 @@ async function onBreakthrough() {
   if (upgrading.value) return
   upgrading.value = true
   tip.value = ''
+  const before = { ...stats.value.total }   // 快照突破前五维属性
   try {
     const data = await breakthrough()
     stats.value = data
@@ -230,6 +259,13 @@ async function onBreakthrough() {
     const paid = data.costPaid != null
       ? `消耗 ${data.costPaid} 灵石、${data.qiCostPaid} 灵气，闭关 ${data.dayCostPaid} 天，`
       : ''
+    // 突破成功：先播动画，再展示提升的属性
+    if (data.levelUp) {
+      fxBefore.value = before
+      fxAfter.value = data.total || {}
+      fxRealm.value = data.fullRealm || ''
+      fxVisible.value = true
+    }
     tip.value = '突破成功！' + paid + '修为已至 ' + data.fullRealm
   } catch (e) {
     tip.value = e.message || '突破失败'
@@ -239,6 +275,16 @@ async function onBreakthrough() {
 }
 
 // ===== 资源获取 =====
+// 触发修炼动作反馈动画（打坐/斩妖/矿脉），展示本次收获
+function playActionFx(type, data) {
+  actionFx.value = {
+    visible: true,
+    type,
+    qiReward: Number(data.qiReward) || 0,
+    stoneReward: Number(data.stoneReward) || 0
+  }
+}
+
 function startCooldown(kind, seconds) {
   if (kind === 'meditate') meditateCd.value = seconds
   else if (kind === 'hunt') huntCd.value = seconds
@@ -252,6 +298,7 @@ async function onMeditate() {
   try {
     const data = await earnMeditate()
     applyEarn(data)
+    playActionFx('meditate', data)
     tip.value = data.message || '打坐获得灵气'
     startCooldown('meditate', data.cooldown || 60)
   } catch (e) {
@@ -268,6 +315,7 @@ async function onHunt() {
   try {
     const data = await earnHunt()
     applyEarn(data)
+    playActionFx('hunt', data)
     tip.value = data.message || '除妖获得灵气与灵石'
     startCooldown('hunt', data.cooldown || 300)
   } catch (e) {
@@ -284,6 +332,7 @@ async function onMine() {
   try {
     const data = await earnMine()
     applyEarn(data)
+    playActionFx('mine', data)
     tip.value = data.message || '挖矿获得灵石'
     startCooldown('mine', data.cooldown || 300)
   } catch (e) {

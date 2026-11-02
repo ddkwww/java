@@ -19,6 +19,12 @@
         <a :class="{ active: isTreasures }" @click.prevent="goTreasures">法宝</a>
         <a :class="{ active: isStats }" @click.prevent="goStats">修为</a>
         <a :class="{ active: isSects }" @click.prevent="goSects">门派</a>
+        <a :class="{ active: isTianjiao }" @click.prevent="goTianjiao">天骄榜</a>
+        <a :class="{ active: isDuel }" @click.prevent="goDuel">对战</a>
+        <a :class="{ active: isFriend }" @click.prevent="goFriend">
+          好友
+          <span v-if="unreadTotal > 0" class="nav-badge">{{ unreadTotal > 99 ? '99+' : unreadTotal }}</span>
+        </a>
       </nav>
 
       <!-- 后台管理系统入口：仅管理员(permission=0)可见 -->
@@ -41,6 +47,11 @@
         <component :is="Component" />
       </router-view>
     </main>
+
+    <!-- 全局对战监听：常驻，任意页面都能接收对战请求/播放动画 -->
+    <DuelListener v-if="showNav" />
+    <!-- 全局好友监听：常驻，任意页面都能收到好友请求弹窗 -->
+    <FriendListener v-if="showNav" />
   </div>
 </template>
 
@@ -48,7 +59,11 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
+import { heartbeat } from './api/duel'
+import { getUnread } from './api/chat'
 import QiParticles from './components/QiParticles.vue'
+import DuelListener from './components/DuelListener.vue'
+import FriendListener from './components/FriendListener.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -62,14 +77,23 @@ const isSutras = computed(() => route.name === 'sutras' || route.name === 'manua
 const isTreasures = computed(() => route.name === 'treasures' || route.name === 'treasure')
 const isStats = computed(() => route.name === 'stats')
 const isSects = computed(() => route.name === 'sects')
+const isTianjiao = computed(() => route.name === 'tianjiao')
+const isDuel = computed(() => route.name === 'duel')
+const isFriend = computed(() => route.name === 'friend')
 
 const activeAnchor = ref('')
+const unreadTotal = ref(0)
+let heartbeatTimer = null
+let unreadTimer = null
 
 function goHome() { router.push('/') }
 function goSutras() { router.push('/sutras') }
 function goTreasures() { router.push('/treasures') }
 function goStats() { router.push('/stats') }
 function goSects() { router.push('/sects') }
+function goTianjiao() { router.push('/tianjiao') }
+function goDuel() { router.push('/duel') }
+function goFriend() { router.push('/friend') }
 function goAdmin() { router.push('/admin/login') }
 
 function onBrand() {
@@ -100,10 +124,20 @@ onMounted(async () => {
   } catch (_) { /* 后端未连，用本地信息 */ }
   window.addEventListener('scroll', onScroll, true) // 捕获：监听内部滚动容器
   onScroll()
+  // 全局心跳：每 15 秒刷新自身在线状态，使「对战」页能列出当前登录的人
+  heartbeatTimer = setInterval(() => { heartbeat().catch(() => {}) }, 15000)
+  // 好友未读消息红点：每 5 秒轮询未读总数
+  const pollUnread = () => {
+    getUnread().then(d => { unreadTotal.value = d.total || 0 }).catch(() => {})
+  }
+  pollUnread()
+  unreadTimer = setInterval(pollUnread, 5000)
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll, true)
+  if (heartbeatTimer) clearInterval(heartbeatTimer)
+  if (unreadTimer) clearInterval(unreadTimer)
 })
 
 // 路由切换后（内容区重渲染）重新计算高亮
@@ -184,6 +218,13 @@ watch(() => route.fullPath, () => nextTick(onScroll))
   content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:2px;
   width:16px;height:2px;border-radius:2px;
   background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+.nav-badge{
+  position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 4px;
+  border-radius:999px;display:grid;place-items:center;
+  font-size:10px;font-weight:700;color:#fff;
+  background:linear-gradient(135deg,#ff6b6b,#e04040);
+  box-shadow:0 0 8px rgba(255,80,80,.6);
 }
 .nav-admin{
   margin-left:6px;padding:8px 16px;border-radius:999px;cursor:pointer;

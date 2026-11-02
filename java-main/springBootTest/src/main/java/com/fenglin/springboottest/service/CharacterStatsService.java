@@ -189,7 +189,7 @@ public class CharacterStatsService {
         result.put("subLevel", subLevel);
         result.put("stage", RealmEnum.stageOfSubLevel(subLevel));
         result.put("fullRealm", RealmEnum.fullName(totalLevel));
-        result.put("lifespanCap", realmEnum != null ? realmEnum.getLifespan() : 0);
+        result.put("lifespanCap", lifespanCapOf(totalLevel));
 
         Map<String, Object> breakdown = new LinkedHashMap<>();
         breakdown.put("realm", realm);
@@ -213,9 +213,7 @@ public class CharacterStatsService {
         if (user.getLifespan() != null) return user.getLifespan();
         // 兼容老数据：动态计算（只读，不修改 user 对象）
         int totalLevel = user.getTotalLevel() != null ? user.getTotalLevel() : 1;
-        int realmIdx = RealmEnum.realmLevelOfTotal(totalLevel);
-        RealmEnum realm = RealmEnum.of(realmIdx);
-        int cap = realm != null ? realm.getLifespan() : 0;
+        int cap = lifespanCapOf(totalLevel);
         int physBonus = physiqueBonus(user.getPhysique()).get("lifespan");
         int ageUsed = user.getAgeUsed() != null ? user.getAgeUsed() : 0;
         int years = (int) Math.floor(ageUsed / 365.0);
@@ -231,13 +229,34 @@ public class CharacterStatsService {
      */
     public static void refreshLifespan(User user) {
         int totalLevel = user.getTotalLevel() != null ? user.getTotalLevel() : 1;
-        int realmIdx = RealmEnum.realmLevelOfTotal(totalLevel);
-        RealmEnum realm = RealmEnum.of(realmIdx);
-        int cap = realm != null ? realm.getLifespan() : 0;
+        int cap = lifespanCapOf(totalLevel);
         int physBonus = physiqueBonus(user.getPhysique()).get("lifespan");
         int ageUsed = user.getAgeUsed() != null ? user.getAgeUsed() : 0;
         int years = (int) Math.floor(ageUsed / 365.0);
         user.setLifespan(Math.max(0, cap + physBonus - years));
+    }
+
+    /**
+     * 累计寿元上限：随修为总层数（1-81）单调递增。
+     * = 前序各境界寿元上限之和 + 当前境界寿元上限 × (当前小层数 / 9)。
+     * 这样无论同一大境界内逐层突破、还是跨大境界，寿元上限都会提升，
+     * 解决「同境界内突破寿元不变」的问题。
+     *
+     * @param totalLevel 修为总层数 1-81
+     * @return 累计寿元上限（年）
+     */
+    public static int lifespanCapOf(int totalLevel) {
+        int t = clamp(totalLevel);
+        int realmIdx = RealmEnum.realmLevelOfTotal(t);
+        int subLevel = RealmEnum.subLevelOfTotal(t);
+        int sum = 0;
+        for (int r = 1; r < realmIdx; r++) {
+            RealmEnum re = RealmEnum.of(r);
+            if (re != null) sum += re.getLifespan();
+        }
+        RealmEnum cur = RealmEnum.of(realmIdx);
+        int curCap = cur != null ? cur.getLifespan() : 0;
+        return sum + (int) Math.round(curCap * (subLevel / 9.0));
     }
 
     /** 根据境界名称取序号，未知回退 1 */
