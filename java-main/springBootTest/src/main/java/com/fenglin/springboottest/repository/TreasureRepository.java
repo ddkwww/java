@@ -12,6 +12,9 @@ public interface TreasureRepository extends JpaRepository<Treasure, Long> {
 
     Optional<Treasure> findFirstByName(String name);
 
+    /** 拍卖行取未拍卖(auction=0)的法宝 */
+    List<Treasure> findByAuction(Integer auction);
+
     /**
      * 关键字搜索：名称 / 简介 / 类别 / 境界 / 出处 任一字段命中即返回（忽略大小写）。
      */

@@ -21,6 +21,7 @@
         <a :class="{ active: isSects }" @click.prevent="goSects">门派</a>
         <a :class="{ active: isTianjiao }" @click.prevent="goTianjiao">天骄榜</a>
         <a :class="{ active: isDuel }" @click.prevent="goDuel">对战</a>
+        <a :class="{ active: isAuction }" @click.prevent="goAuction">拍卖行</a>
         <a :class="{ active: isFriend }" @click.prevent="goFriend">
           好友
           <span v-if="unreadTotal > 0" class="nav-badge">{{ unreadTotal > 99 ? '99+' : unreadTotal }}</span>
@@ -52,6 +53,11 @@
     <DuelListener v-if="showNav" />
     <!-- 全局好友监听：常驻，任意页面都能收到好友请求弹窗 -->
     <FriendListener v-if="showNav" />
+
+    <!-- 全局拍卖行开拍通知（即使不在拍卖页也能收到 + 参与过的自动跳转） -->
+    <transition name="toast">
+      <div v-if="auctionToastVisible" class="g-toast">{{ auctionToastMsg }}</div>
+    </transition>
   </div>
 </template>
 
@@ -61,6 +67,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { heartbeat } from './api/duel'
 import { getUnread } from './api/chat'
+import { fetchAuctionStatus } from './api/auction'
 import QiParticles from './components/QiParticles.vue'
 import DuelListener from './components/DuelListener.vue'
 import FriendListener from './components/FriendListener.vue'
@@ -79,12 +86,47 @@ const isStats = computed(() => route.name === 'stats')
 const isSects = computed(() => route.name === 'sects')
 const isTianjiao = computed(() => route.name === 'tianjiao')
 const isDuel = computed(() => route.name === 'duel')
+const isAuction = computed(() => route.name === 'auction')
 const isFriend = computed(() => route.name === 'friend')
 
 const activeAnchor = ref('')
 const unreadTotal = ref(0)
 let heartbeatTimer = null
 let unreadTimer = null
+
+// ===== 全局拍卖行监听：任意页面都能收到开拍提醒，参与过的自动跳转 =====
+const auctionToastVisible = ref(false)
+const auctionToastMsg = ref('')
+let auctionPrevOpen = -1
+let auctionToastTimer = null
+let auctionTimer = null
+
+function showAuctionToast(msg) {
+  auctionToastMsg.value = msg
+  auctionToastVisible.value = true
+  if (auctionToastTimer) clearTimeout(auctionToastTimer)
+  auctionToastTimer = setTimeout(() => { auctionToastVisible.value = false }, 4500)
+}
+
+async function pollAuctionOpen() {
+  if (!showNav.value) return
+  try {
+    const s = await fetchAuctionStatus()
+    if (auctionPrevOpen === -1) { auctionPrevOpen = s.openCount || 0; return }
+    if (s.openCount > auctionPrevOpen) {
+      auctionPrevOpen = s.openCount
+      const participated = localStorage.getItem('auction_participated') === 'true'
+      // 已在拍卖页时由 AuctionView 自身弹 Toast，避免重复
+      if (route.name !== 'auction') {
+        showAuctionToast('🔔 拍卖行已开启！本场拍品按品阶由低到高依次竞拍')
+        if (participated) {
+          localStorage.removeItem('auction_participated') // 已消耗，下一轮需重新报名
+          router.push('/auction')
+        }
+      }
+    }
+  } catch (_) { /* 后端未连，静默 */ }
+}
 
 function goHome() { router.push('/') }
 function goSutras() { router.push('/sutras') }
@@ -93,6 +135,7 @@ function goStats() { router.push('/stats') }
 function goSects() { router.push('/sects') }
 function goTianjiao() { router.push('/tianjiao') }
 function goDuel() { router.push('/duel') }
+function goAuction() { router.push('/auction') }
 function goFriend() { router.push('/friend') }
 function goAdmin() { router.push('/admin/login') }
 
@@ -132,12 +175,17 @@ onMounted(async () => {
   }
   pollUnread()
   unreadTimer = setInterval(pollUnread, 5000)
+  // 拍卖行开拍监听：每 5 秒轮询，开拍时通知 + 参与过者自动跳转
+  auctionTimer = setInterval(pollAuctionOpen, 5000)
+  pollAuctionOpen()
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll, true)
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (unreadTimer) clearInterval(unreadTimer)
+  if (auctionTimer) clearInterval(auctionTimer)
+  if (auctionToastTimer) clearTimeout(auctionToastTimer)
 })
 
 // 路由切换后（内容区重渲染）重新计算高亮
@@ -282,4 +330,12 @@ watch(() => route.fullPath, () => nextTick(onScroll))
   .stone-chip{padding:5px 9px;font-size:12px}
   .back-home{padding:7px 10px;font-size:12px}
 }
+
+/* 全局拍卖行开拍通知 */
+.g-toast{position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:200;
+  padding:12px 24px;border-radius:999px;font-size:15px;letter-spacing:1px;color:#0c1322;font-weight:700;
+  background:linear-gradient(135deg,var(--gold-2),var(--gold));box-shadow:0 8px 30px rgba(233,200,120,.45);
+  max-width:92vw;text-align:center;cursor:pointer;}
+.g-toast-enter-active,.g-toast-leave-active{transition:all .35s ease}
+.g-toast-enter-from,.g-toast-leave-to{opacity:0;transform:translate(-50%,-16px)}
 </style>

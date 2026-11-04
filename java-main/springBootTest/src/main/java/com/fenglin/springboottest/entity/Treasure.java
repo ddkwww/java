@@ -62,6 +62,10 @@ public class Treasure {
     @Column(name = "price")
     private Integer price;
 
+    /** 拍卖标记：0=未拍卖（可进入拍卖行），1=已拍卖（已拍出，移出拍卖池），默认 0 */
+    @Column(name = "auction", columnDefinition = "int default 0")
+    private Integer auction = 0;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -76,6 +80,14 @@ public class Treasure {
 
     public void setPrice(Integer price) {
         this.price = price;
+    }
+
+    public Integer getAuction() {
+        return auction;
+    }
+
+    public void setAuction(Integer auction) {
+        this.auction = auction;
     }
 
     public Long getId() {
