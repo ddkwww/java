@@ -109,6 +109,8 @@ public enum RealmEnum {
     //   实际费用 = 基础费 × (1 + LAYER_GROWTH × (目标层小层数 - 1))
     //   其中 LAYER_GROWTH = 0.15，使同境界内末层费用约为首层的 2.2 倍，
     //   且本境界末层费用仍低于下一大境界首层（曲线无缝衔接）。
+    //   额外叠加：每个小境界（目标小层数）再固定加 100 灵石、40 灵气，
+    //   即 灵石 += 100 × 目标小层数，灵气 += 40 × 目标小层数（随小境界递增）。
 
     /** 每个大境界「突破到下一层」的基础灵石（下标 0 对应练气期，8 对应渡劫期） */
     private static final int[] BREAKTHROUGH_COST = {20, 50, 120, 300, 800, 2000, 5000, 12000, 30000};
@@ -124,7 +126,8 @@ public enum RealmEnum {
 
     /**
      * 计算从「当前修为总层数」突破到下一层所需的灵石。
-     * 费用 = 目标层所在境界基础费 × (1 + LAYER_GROWTH × (目标层小层数 - 1))。
+     * 费用 = 目标层所在境界基础费 × (1 + LAYER_GROWTH × (目标层小层数 - 1))，
+     * 并额外叠加 100 × 目标小境界层数 灵石。
      *
      * @param currentTotalLevel 当前修为总层数（1-81）
      * @return 下一层突破所需灵石；已满 81 层返回 -1
@@ -133,11 +136,13 @@ public enum RealmEnum {
         int idx = breakthroughIdx(currentTotalLevel);
         if (idx < 0) return -1;
         int subLevel = subLevelOfTotal(currentTotalLevel + 1);
-        return (int) Math.round(BREAKTHROUGH_COST[idx] * layerFactor(subLevel));
+        // 每个小境界额外叠加 100 灵石（随目标小境界层数递增）
+        return (int) Math.round(BREAKTHROUGH_COST[idx] * layerFactor(subLevel)) + 100 * subLevel;
     }
 
     /**
-     * 计算突破到下一层所需灵气（与灵石同梯度，约为灵石的 1/2）。
+     * 计算突破到下一层所需灵气（与灵石同梯度，约为灵石的 1/2），
+     * 并额外叠加 40 × 目标小境界层数 灵气。
      *
      * @param currentTotalLevel 当前修为总层数（1-81）
      * @return 下一层突破所需灵气；已满 81 层返回 -1
@@ -146,7 +151,8 @@ public enum RealmEnum {
         int idx = breakthroughIdx(currentTotalLevel);
         if (idx < 0) return -1;
         int subLevel = subLevelOfTotal(currentTotalLevel + 1);
-        return (int) Math.round(BREAKTHROUGH_QI_COST[idx] * layerFactor(subLevel));
+        // 每个小境界额外叠加 40 灵气（随目标小境界层数递增）
+        return (int) Math.round(BREAKTHROUGH_QI_COST[idx] * layerFactor(subLevel)) + 40 * subLevel;
     }
 
     /**

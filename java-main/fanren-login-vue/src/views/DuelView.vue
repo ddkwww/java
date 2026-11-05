@@ -2,7 +2,9 @@
   <div class="duel-wrap">
     <header class="duel-head">
       <h1>论 道 争 锋</h1>
-      <p class="sub">当前在线道友 · 每 5 秒刷新 · 点击查看详情，亦可发起切磋</p>
+      <p class="sub">
+        当前在线道友共 <b class="online-count">{{ onlineUsers.length }}</b> 人（全部显示，无人数上限）· 每 5 秒刷新 · 点击查看详情，亦可发起切磋
+      </p>
     </header>
 
     <!-- 在线用户列表 -->
@@ -136,6 +138,10 @@ onUnmounted(() => {
   filter: drop-shadow(0 0 18px rgba(233,200,120,.45));
 }
 .duel-head .sub { color: var(--ink-dim); letter-spacing: 2px; font-size: 13px; margin-top: 8px; }
+.duel-head .sub .online-count {
+  color: var(--gold-2); font-weight: 800; font-size: 16px;
+  padding: 0 4px; text-shadow: 0 0 12px rgba(233,200,120,.4);
+}
 
 .online-grid {
   display: grid; gap: 16px;

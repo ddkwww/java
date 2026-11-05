@@ -22,6 +22,7 @@
         <a :class="{ active: isTianjiao }" @click.prevent="goTianjiao">天骄榜</a>
         <a :class="{ active: isDuel }" @click.prevent="goDuel">对战</a>
         <a :class="{ active: isAuction }" @click.prevent="goAuction">拍卖行</a>
+        <a :class="{ active: isGames }" @click.prevent="goGames">小游戏</a>
         <a :class="{ active: isFriend }" @click.prevent="goFriend">
           好友
           <span v-if="unreadTotal > 0" class="nav-badge">{{ unreadTotal > 99 ? '99+' : unreadTotal }}</span>
@@ -87,6 +88,7 @@ const isSects = computed(() => route.name === 'sects')
 const isTianjiao = computed(() => route.name === 'tianjiao')
 const isDuel = computed(() => route.name === 'duel')
 const isAuction = computed(() => route.name === 'auction')
+const isGames = computed(() => route.name === 'games' || route.name === 'monopoly')
 const isFriend = computed(() => route.name === 'friend')
 
 const activeAnchor = ref('')
@@ -136,6 +138,7 @@ function goSects() { router.push('/sects') }
 function goTianjiao() { router.push('/tianjiao') }
 function goDuel() { router.push('/duel') }
 function goAuction() { router.push('/auction') }
+function goGames() { router.push('/games') }
 function goFriend() { router.push('/friend') }
 function goAdmin() { router.push('/admin/login') }
 

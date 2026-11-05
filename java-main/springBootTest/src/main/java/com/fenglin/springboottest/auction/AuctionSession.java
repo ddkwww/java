@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
  * 规则（与前端契约一致）：
  *   - 每 AUCTION_INTERVAL_MS 自动开启一场，通知所有在线修士（前端轮询到 RUNNING 时弹 Toast）。
  *   - 每场取 auction=0 的功法(t_manual)与法宝(t_treasure)，按品阶升序（黄<玄<地<天，最低级先拍），取前 LOT_COUNT 件。
- *   - 每件起拍价 START_PRICE（100 灵石）；每次加价档位 +10/+50/+100/+500；每次加价后倒计时重置为 LOT_MS（5 秒）。
+ *   - 每件起拍价 START_PRICE（100 灵石）；每次加价档位 +10/+50/+100/+500；每次加价后倒计时重置为 LOT_MS（15 秒）。
  *   - 倒计时归零且无人再加价，当前最高出价者得：扣灵石 + 装备为当前主修/随身法宝 + 标记 auction=1（移出拍卖池）。
  *   - 无人出价则流拍，保持 auction=0（下一场可再次参与）。
  *
@@ -32,8 +32,8 @@ public class AuctionSession {
     private static final long AUCTION_INTERVAL_MS = 10 * 60 * 1000L;
     /** 首次开拍延迟：服务器启动后 10 分钟开启第一场（与间隔一致） */
     private static final long FIRST_OPEN_DELAY_MS = 10 * 60 * 1000L;
-    /** 单件拍品倒计时：加价后停留 5 秒 */
-    private static final long LOT_MS = 5000L;
+    /** 单件拍品倒计时：加价后停留 15 秒 */
+    private static final long LOT_MS = 15000L;
     /** 每场拍品数量 */
     private static final int LOT_COUNT = 5;
     /** 起拍价（灵石） */
@@ -194,7 +194,7 @@ public class AuctionSession {
         if (!valid) return "加价必须为 +10 / +50 / +100 / +500 灵石";
         currentPrice = amount;
         highestBidder = username;
-        lotEndsAt = now + LOT_MS; // 重置 5 秒倒计时
+        lotEndsAt = now + LOT_MS; // 重置 15 秒倒计时
         bidLog.add(new BidLogEntry(username, amount, inc, now));
         return null;
     }

@@ -34,7 +34,7 @@
         <p class="join-tip">开拍后会自动跳转到拍卖行并提醒你；也可在任意页面等待开拍通知。</p>
       </div>
 
-      <p class="await-hint">开拍后将按品阶由低到高（黄→玄→地→天）依次拍卖 5 件，每次加价后停留 5 秒，无人再加价即归最高出价者。</p>
+      <p class="await-hint">开拍后将按品阶由低到高（黄→玄→地→天）依次拍卖 5 件，每次加价后停留 15 秒，无人再加价即归最高出价者。</p>
     </section>
 
     <!-- ===== 竞拍中 ===== -->
@@ -72,7 +72,7 @@
             <template v-else>最高出价：{{ currentLot.highestBidder }}</template>
           </p>
 
-          <!-- 5 秒倒计时 -->
+          <!-- 15 秒倒计时 -->
           <div class="timer">
             <div class="timer-bar"><span :style="{ width: timerPct + '%' }"></span></div>
             <span class="timer-num">{{ timerSec }}s</span>
@@ -210,7 +210,7 @@ const timerSec = computed(() => {
 const timerPct = computed(() => {
   if (!currentLot.value) return 0
   const remain = Math.max(0, currentLot.value.lotEndsAt - now.value)
-  return Math.min(100, (remain / 5000) * 100)
+  return Math.min(100, (remain / 15000) * 100)
 })
 
 // 下一场倒计时
