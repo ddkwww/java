@@ -1,8 +1,9 @@
 // 好友聊天 API（契约：后端 ChatController，均需 Header Authorization: Bearer <token>）
 //   POST /api/chat/send     {to, content} -> { from, to, content, time }
-//   GET  /api/chat/history?peer=   -> { messages:[{from,to,content,time,mine}] }
+//   GET  /api/chat/history?peer=   -> { messages:[{from,to,content,time,mine,type,stone}] }
 //   GET  /api/chat/unread          -> { counts:{friend: n}, total }
 //   POST /api/chat/read     {peer} -> { message }
+//   POST /api/chat/gift     {to, amount} -> { message, spiritStone, to, amount }
 const BASE = import.meta.env.VITE_API_BASE || ''
 
 function authHeader() {
@@ -50,5 +51,13 @@ export function markRead(peer) {
   return request('/api/chat/read', {
     method: 'POST',
     body: JSON.stringify({ peer })
+  })
+}
+
+// 向好友赠送灵石（扣己加彼，留存 GIFT 消息）
+export function giftStone(to, amount) {
+  return request('/api/chat/gift', {
+    method: 'POST',
+    body: JSON.stringify({ to, amount })
   })
 }

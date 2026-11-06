@@ -34,6 +34,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *   POST /api/admin/login -> { username, password } -> 仅 permission=0 可成功，否则 403
  *   GET  /api/me       -> Header Authorization: Bearer <token> -> { username, realm, level, permission }
  *   POST /api/logout   -> Header Authorization: Bearer <token> -> { ok:true }
+ *   POST /api/change-password -> Header Authorization: Bearer <token> + body {oldPassword,newPassword}
+ *                               -> {message}；失败 401 未登录 / 400 原密码错误·新密码不合规范·与原密码相同
  * 会话 token 以内存态 Map 维护（重启即失效），适合本地演示与联调。
  */
 @RestController
@@ -318,6 +320,48 @@ public class AuthController {
             tokenStore.remove(token);
         }
         return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+    /**
+     * 修改密码（需登录）：校验原密码后更新为新密码（SHA-256 哈希，与注册/登录一致）。
+     * body: { oldPassword, newPassword }
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@RequestHeader(value = "Authorization", required = false) String auth,
+                                           @RequestBody Map<String, String> body) {
+        String token = parseToken(auth);
+        if (token == null || !tokenStore.contains(token)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "未登录或登录已失效"));
+        }
+        String username = tokenStore.getUsername(token);
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "用户不存在"));
+        }
+
+        String oldPassword = body.get("oldPassword");
+        String newPassword = body.get("newPassword");
+        if (oldPassword == null || oldPassword.isEmpty() || newPassword == null || newPassword.isEmpty()) {
+            return bad("请填写原密码与新密码");
+        }
+        // 校验原密码
+        if (!sha256(oldPassword).equals(user.getPassword())) {
+            return bad("原密码错误");
+        }
+        // 新密码强度（与注册一致：5–15 位）
+        if (newPassword.length() < PW_MIN || newPassword.length() > PW_MAX) {
+            return bad("新密码长度需为 " + PW_MIN + "–" + PW_MAX + " 位");
+        }
+        // 新密码不得与原密码相同
+        if (sha256(oldPassword).equals(sha256(newPassword))) {
+            return bad("新密码不能与原密码相同");
+        }
+
+        user.setPassword(sha256(newPassword));
+        userRepository.save(user);
+        return ResponseEntity.ok(Map.of("message", "密码已修改成功"));
     }
 
     /** 从 Authorization: Bearer <token> 中解析 token，失败返回 null */

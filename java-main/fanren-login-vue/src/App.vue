@@ -36,10 +36,19 @@
         <span class="stone-chip" title="灵石" @click="goStats">
           <i class="stone-dot">灵</i>{{ auth.spiritStone }}
         </span>
-        <span class="user-chip" @click="goStats">
-          <i class="dot"></i>{{ auth.user || '无名' }} · {{ auth.profile?.realm || '炼气' }}
-        </span>
-        <button class="btn-exit" @click="onLogout" title="退出登录">退归山林</button>
+        <div class="user-menu" @click.stop>
+          <span class="user-chip" @click="toggleUserMenu">
+            <i class="dot"></i>{{ auth.user || '无名' }} · {{ auth.profile?.realm || '炼气' }}
+            <span class="caret">▾</span>
+          </span>
+          <transition name="drop">
+            <div v-if="userMenuOpen" class="user-dropdown">
+              <a @click="goStats">个人资料</a>
+              <a @click="goChangePassword">修改密码</a>
+              <a class="danger" @click="onLogout">退归山林</a>
+            </div>
+          </transition>
+        </div>
       </div>
     </header>
 
@@ -142,12 +151,19 @@ function goGames() { router.push('/games') }
 function goFriend() { router.push('/friend') }
 function goAdmin() { router.push('/admin/login') }
 
+// 用户下拉菜单：个人资料 / 修改密码 / 退归山林
+const userMenuOpen = ref(false)
+function toggleUserMenu() { userMenuOpen.value = !userMenuOpen.value }
+function closeUserMenu() { userMenuOpen.value = false }
+function goChangePassword() { userMenuOpen.value = false; router.push('/change-password') }
+
 function onBrand() {
   if (isHome.value) scrollTo('top')
   else router.push('/')
 }
 
 function onLogout() {
+  userMenuOpen.value = false
   auth.logout()
   router.push('/login')
 }
@@ -170,6 +186,8 @@ onMounted(async () => {
   } catch (_) { /* 后端未连，用本地信息 */ }
   window.addEventListener('scroll', onScroll, true) // 捕获：监听内部滚动容器
   onScroll()
+  // 点击页面空白处关闭用户下拉菜单
+  document.addEventListener('click', closeUserMenu)
   // 全局心跳：每 15 秒刷新自身在线状态，使「对战」页能列出当前登录的人
   heartbeatTimer = setInterval(() => { heartbeat().catch(() => {}) }, 15000)
   // 好友未读消息红点：每 5 秒轮询未读总数
@@ -185,14 +203,15 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll, true)
+  document.removeEventListener('click', closeUserMenu)
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (unreadTimer) clearInterval(unreadTimer)
   if (auctionTimer) clearInterval(auctionTimer)
   if (auctionToastTimer) clearTimeout(auctionToastTimer)
 })
 
-// 路由切换后（内容区重渲染）重新计算高亮
-watch(() => route.fullPath, () => nextTick(onScroll))
+// 路由切换后（内容区重渲染）重新计算高亮，并收起用户菜单
+watch(() => route.fullPath, () => { nextTick(onScroll); closeUserMenu() })
 </script>
 
 <style scoped>
@@ -314,14 +333,23 @@ watch(() => route.fullPath, () => nextTick(onScroll))
   background:var(--qi);box-shadow:0 0 8px var(--qi);
   animation:breath 2.6s ease-in-out infinite;
 }
-.btn-exit{
-  padding:7px 14px;border-radius:10px;cursor:pointer;
-  border:1px solid rgba(233,200,120,.35);background:transparent;
-  color:var(--gold);font-family:inherit;font-size:13px;letter-spacing:2px;transition:.2s;
+.user-chip .caret{font-size:10px;margin-left:3px;opacity:.7}
+.user-menu{position:relative;cursor:pointer}
+.user-dropdown{
+  position:absolute;right:0;top:calc(100% + 10px);z-index:60;min-width:148px;
+  display:flex;flex-direction:column;padding:6px;border-radius:14px;
+  background:rgba(12,18,36,.97);border:1px solid rgba(233,200,120,.22);
+  box-shadow:0 18px 50px rgba(0,0,0,.55);backdrop-filter:blur(10px);
 }
-.btn-exit:hover{
-  background:rgba(233,200,120,.12);box-shadow:0 0 16px rgba(233,200,120,.25);
+.user-dropdown a{
+  padding:10px 14px;border-radius:10px;cursor:pointer;font-size:14px;letter-spacing:1px;
+  color:var(--ink);transition:.18s;white-space:nowrap;text-decoration:none;
 }
+.user-dropdown a:hover{background:rgba(233,200,120,.12);color:var(--gold-2)}
+.user-dropdown a.danger{color:#ff8a8a}
+.user-dropdown a.danger:hover{background:rgba(255,138,138,.12);color:#ff8a8a}
+.drop-enter-active,.drop-leave-active{transition:all .18s ease}
+.drop-enter-from,.drop-leave-to{opacity:0;transform:translateY(-8px)}
 
 /* 移动端 */
 @media(max-width:760px){

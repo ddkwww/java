@@ -2,8 +2,6 @@ package com.fenglin.springboottest.game;
 
 import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.repository.UserRepository;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,27 +22,35 @@ import java.util.stream.Collectors;
  *     upgradeCost，租金随等级提升，最高 MAX_PROPERTY_LEVEL 级。
  *   - 闭关格：下次轮到自己时跳过（不掷骰）。
  *   - 总回合数达到 MAX_ROLLS（4 人 × ROUNDS_PER_PLAYER）后结束（ENDED）；
- *     任意玩家也可通过「结束本局」(end) 提前结算。
+ *     任意玩家可发起「结束投票」，过半数（> 半数）赞成才提前结算，超时或全员否决则继续。
  *   - 结算：按局内灵石排名，奖池按 [50%,30%,15%,5%] 发放至真实账号；
  *     玩家净变化 = 发放 - 报名费。
  *
  * 防卡死：当前玩家超过 IDLE_MS 未掷骰/未作选择，定时任务自动代掷或自动跳过选择。
+ *
+ * 本类不再由 Spring 单例托管（去掉 @Component），而是由 MonopolyRoomManager 按房间号
+ * 实例化多个对象，manager 统一用 @Scheduled 驱动所有房间的 tick，并按用户名路由请求，
+ * 从而支持「多局并行」：满 4 人的房间继续玩，其余人可另开新局。
  */
-@Component
 public class MonopolyRoom {
+
+    /** 房间唯一标识（由 manager 分配，如 R1、R2…） */
+    private final String roomId;
 
     /** 报名费（灵石），报名即真实扣减进入奖池 */
     public static final int ENTRY_FEE = 10;
     /** 棋盘格数 */
     public static final int BOARD_SIZE = 20;
     /** 经过起点奖励 */
-    public static final int START_BONUS = 120;
+    public static final int START_BONUS = 500;
     /** 每人可掷骰回合数 */
     public static final int ROUNDS_PER_PLAYER = 12;
     /** 总掷骰次数上限 = 4 × ROUNDS_PER_PLAYER */
     public static final int MAX_ROLLS = 4 * ROUNDS_PER_PLAYER;
     /** 当前玩家未操作超时（毫秒），超时自动代掷/自动跳过 */
     public static final long IDLE_MS = 90_000L;
+    /** 结束投票有效时长（毫秒），超时未达多数则撤销投票继续游戏 */
+    public static final long VOTE_MS = 60_000L;
     /** 灵矿最高等级 */
     public static final int MAX_PROPERTY_LEVEL = 4;
 
@@ -53,8 +59,21 @@ public class MonopolyRoom {
     private final UserRepository userRepository;
     private final Random rng = new Random();
 
-    public MonopolyRoom(UserRepository userRepository) {
+    public MonopolyRoom(String roomId, UserRepository userRepository) {
+        this.roomId = roomId;
         this.userRepository = userRepository;
+    }
+
+    public String getRoomId() { return roomId; }
+
+    /** 该用户是否已报名入此桌 */
+    public boolean isMember(String username) {
+        return joined.contains(username);
+    }
+
+    /** 该用户是否可加入此桌（等待阶段且未满且未重复） */
+    public boolean canJoin(String username) {
+        return state == State.WAITING && seats.size() < 4 && !joined.contains(username);
     }
 
     // ===== 共享状态（全部在 synchronized 块内访问） =====
@@ -83,14 +102,21 @@ public class MonopolyRoom {
     private String pendingUsername = null;
     private long pendingSince = 0;
 
+    // ===== 结束投票（多数同意才提前结算） =====
+    private boolean voteEndActive = false;
+    private final Set<String> voteEndYes = ConcurrentHashMap.newKeySet();
+    private final Set<String> voteEndNo = ConcurrentHashMap.newKeySet();
+    private String voteEndInitiator = null;
+    private long voteEndSince = 0;
+
     // ===== 内部数据结构 =====
     public static class Seat {
         public String username;
         public String realm;
         public int position;          // 棋盘位置 0..BOARD_SIZE-1
-        public int gameStone;         // 局内灵石（结算用）
         public boolean skipNext;      // 闭关：下次跳过
         public boolean left;          // 报名后退出（仅 WAITING 阶段会发生）
+        public boolean out;           // 灵石耗尽已出局（PLAYING 阶段发生，座位保留用于展示）
     }
 
     public static class PropState {
@@ -145,8 +171,11 @@ public class MonopolyRoom {
             this(index, name, type, desc, false, 0, 0);
         }
         Tile(int index, String name, String type, String desc, int price, int baseRent) {
+            this(index, name, type, desc, true, price, baseRent);
+        }
+        Tile(int index, String name, String type, String desc, boolean property, int price, int baseRent) {
             this.index = index; this.name = name; this.type = type; this.desc = desc;
-            this.property = true; this.price = price; this.baseRent = baseRent;
+            this.property = property; this.price = price; this.baseRent = baseRent;
         }
     }
 
@@ -177,12 +206,17 @@ public class MonopolyRoom {
         return b;
     }
 
-    // ===== 调度：每秒驱动一次（处理超时自动代掷 / 自动跳过选择） =====
-    @Scheduled(fixedRate = 1000)
+    // ===== 调度：由 MonopolyRoomManager 的 @Scheduled 每秒驱动一次 =====
     public void tick() {
         long now = System.currentTimeMillis();
         synchronized (this) {
             if (state != State.PLAYING) return;
+            // 结束投票超时：撤销并继续游戏
+            if (voteEndActive && voteEndSince > 0 && now - voteEndSince > VOTE_MS) {
+                voteEndActive = false;
+                voteEndYes.clear(); voteEndNo.clear();
+                pushLog("系统", "结束投票超时，继续游戏");
+            }
             if (pendingUsername != null) {
                 if (pendingSince > 0 && now - pendingSince > IDLE_MS) {
                     autoSkip(now);
@@ -191,7 +225,7 @@ public class MonopolyRoom {
             }
             if (turnStartedAt > 0 && now - turnStartedAt > IDLE_MS) {
                 Seat s = seats.get(currentSeat);
-                if (s != null && !s.left) {
+                if (s != null && !s.left && !s.out) {
                     autoRoll(s.username, now);
                 }
             }
@@ -212,7 +246,6 @@ public class MonopolyRoom {
         seat.username = username;
         seat.realm = u.getRealm() != null ? u.getRealm() : "炼气期";
         seat.position = 0;
-        seat.gameStone = 0;
         seats.add(seat);
         joined.add(username);
         pushLog(username, "报名入桌，缴纳 " + ENTRY_FEE + " 灵石进入奖池");
@@ -280,8 +313,8 @@ public class MonopolyRoom {
         s.position = np;
         boolean passedStart = (old + dice) >= BOARD_SIZE;
         if (passedStart) {
-            s.gameStone += START_BONUS;
-            pushLog(s.username, "经过起点，获得 " + START_BONUS + " 局内灵石");
+            changeOwn(s, START_BONUS);
+            pushLog(s.username, "经过起点，获得 " + START_BONUS + " 灵石");
         }
         Tile t = BOARD[np];
         eventSeq++;
@@ -318,12 +351,13 @@ public class MonopolyRoom {
                     return;
                 }
             } else {
-                // 他人已占领：自动付租金
+                // 他人已占领：自动付租金（用真实灵石，不足则付尽余额并出局）
                 int rent = t.baseRent * ps.level;
-                int pay = Math.min(rent, s.gameStone);
-                s.gameStone -= pay;
+                int have = realStone(s.username);
+                int pay = Math.min(rent, have);
+                changeOwn(s, -pay);
                 Seat owner = findSeat(ps.owner);
-                if (owner != null) owner.gameStone += pay;
+                if (owner != null && pay > 0) changeOwn(owner, pay);
                 String msg = s.username + " 掷出 " + dice + " 点，抵达「" + t.name + "」，支付租金 " + pay + " 灵石给 " + ps.owner;
                 lastEvent = new LastEvent(s.username, msg, -pay, np);
                 pushLog(s.username, "掷出 " + dice + " 点 → " + t.name + "，付租金 " + pay + " 给 " + ps.owner);
@@ -333,9 +367,8 @@ public class MonopolyRoom {
             }
         } else {
             int ev = resolveTile(s, t);
-            if (s.gameStone < 0) s.gameStone = 0;
             String msg = s.username + " 掷出 " + dice + " 点，抵达「" + t.name + "」" + t.desc
-                    + (ev >= 0 ? "，局内灵石 +" + ev : "，局内灵石 " + ev);
+                    + (ev >= 0 ? "，灵石 +" + ev : "，灵石 " + ev);
             lastEvent = new LastEvent(s.username, msg, ev, np);
             pushLog(s.username, "掷出 " + dice + " 点 → " + t.name + (ev >= 0 ? " (+" + ev + ")" : " (" + ev + ")"));
             rollsDone++;
@@ -355,8 +388,8 @@ public class MonopolyRoom {
         if ("OCCUPY".equals(pendingType)) {
             Tile t = BOARD[pendingTile];
             if ("occupy".equalsIgnoreCase(action)) {
-                if (s.gameStone < t.price) return "局内灵石不足，占领需 " + t.price;
-                s.gameStone -= t.price;
+                if (realStone(username) < t.price) return "灵石不足，占领需 " + t.price;
+                changeOwn(s, -t.price);
                 props.put(pendingTile, new PropState(username, 1));
                 lastEvent = new LastEvent(username, username + " 占领了「" + t.name + "」，成为矿主", -t.price, pendingTile);
                 pushLog(username, "占领「" + t.name + "」，花费 " + t.price + " 灵石");
@@ -371,8 +404,8 @@ public class MonopolyRoom {
             if ("upgrade".equalsIgnoreCase(action)) {
                 if (ps.level >= MAX_PROPERTY_LEVEL) return "已达最高等级";
                 int cost = upgradeCost(t);
-                if (s.gameStone < cost) return "局内灵石不足，升级需 " + cost;
-                s.gameStone -= cost;
+                if (realStone(username) < cost) return "灵石不足，升级需 " + cost;
+                changeOwn(s, -cost);
                 ps.level++;
                 int rent = t.baseRent * ps.level;
                 lastEvent = new LastEvent(username, username + " 将「" + t.name + "」升至 Lv." + ps.level + "，租金升至 " + rent, -cost, pendingTile);
@@ -388,13 +421,55 @@ public class MonopolyRoom {
         return null;
     }
 
-    /** 提前结算（任意在场玩家可发起） */
-    public synchronized String end(String username) {
+    /** 发起结束投票：任意在场玩家可提议，发起人默认赞成 */
+    public synchronized String proposeEnd(String username) {
         if (state != State.PLAYING) return "牌桌未在进行中";
-        if (findSeat(username) == null) return "您不在牌桌中";
-        pushLog("系统", username + " 发起提前结算");
-        settle(now());
+        Seat s0 = findSeat(username);
+        if (s0 == null) return "您不在牌桌中";
+        if (s0.out) return "您已离场，无法发起投票";
+        if (voteEndActive) return "已有结束投票进行中";
+        voteEndActive = true;
+        voteEndYes.clear();
+        voteEndNo.clear();
+        voteEndInitiator = username;
+        voteEndSince = now();
+        voteEndYes.add(username);
+        pushLog("系统", username + " 提议提前结束本局，等待众人投票（需过半数赞成）");
+        checkVoteEnd();
         return null;
+    }
+
+    /** 对结束投票表态：agree=true 赞成，false 反对 */
+    public synchronized String voteEnd(String username, boolean agree) {
+        if (state != State.PLAYING) return "牌桌未在进行中";
+        if (!voteEndActive) return "当前没有进行中的结束投票";
+        Seat s0 = findSeat(username);
+        if (s0 == null) return "您不在牌桌中";
+        if (s0.out) return "您已离场，无法投票";
+        if (voteEndYes.contains(username) || voteEndNo.contains(username)) return "您已投过票";
+        if (agree) voteEndYes.add(username); else voteEndNo.add(username);
+        pushLog(username, "对结束本局投了" + (agree ? "赞成" : "反对") + "票");
+        checkVoteEnd();
+        return null;
+    }
+
+    /** 检查投票是否达成多数（> 半数）或全员投完未达多数（撤销） */
+    private void checkVoteEnd() {
+        if (!voteEndActive) return;
+        int total = activeCount();
+        if (total == 0) { voteEndActive = false; return; }
+        if (voteEndYes.size() > total / 2) {
+            pushLog("系统", "赞成结束票数过半，提前结算本局");
+            voteEndActive = false;
+            settle(now());
+            return;
+        }
+        if ((voteEndYes.size() + voteEndNo.size()) >= total) {
+            pushLog("系统", "结束投票未达多数，继续游戏");
+            voteEndActive = false;
+            voteEndYes.clear();
+            voteEndNo.clear();
+        }
     }
 
     private void autoSkip(long now) {
@@ -422,29 +497,29 @@ public class MonopolyRoom {
         return Math.max(10, t.price / 2);
     }
 
-    /** 格子事件结算（仅非占领地块），返回对 gameStone 的净增减 */
+    /** 格子事件结算（仅非占领地块），返回对真实灵石的净增减 */
     private int resolveTile(Seat s, Tile t) {
         switch (t.type) {
             case "FORTUNE": {
                 int g = -120 + rng.nextInt(341); // -120..220
-                s.gameStone += g; return g;
+                return changeOwn(s, g);
             }
             case "MARKET": {
                 int g = -80 + rng.nextInt(261); // -80..180
-                s.gameStone += g; return g;
+                return changeOwn(s, g);
             }
             case "THUNDER": {
                 int g = -(80 + rng.nextInt(121)); // -80..-200
-                s.gameStone += g; return g;
+                return changeOwn(s, g);
             }
             case "TRIBUTE": {
-                int tax = Math.max(20, (int)(s.gameStone * 0.1));
-                s.gameStone -= tax; return -tax;
+                int tax = Math.max(20, (int)(realStone(s.username) * 0.1));
+                return changeOwn(s, -tax);
             }
             case "SECRET": {
                 int[] cards = {200, -150, 120, -100, 300, -200};
                 int g = cards[rng.nextInt(cards.length)];
-                s.gameStone += g; return g;
+                return changeOwn(s, g);
             }
             case "PAUSE": {
                 s.skipNext = true; return 0;
@@ -457,14 +532,14 @@ public class MonopolyRoom {
         }
     }
 
-    /** 推进到下一个可行动的座位（处理闭关跳过） */
+    /** 推进到下一个可行动的座位（跳过闭关 / 已出局） */
     private void advanceTurn(long now) {
         if (state != State.PLAYING) return;
         int next = currentSeat;
-        for (int i = 0; i < 4; i++) {
-            next = (next + 1) % 4;
+        for (int i = 0; i < seats.size(); i++) {
+            next = (next + 1) % seats.size();
             Seat ns = seats.get(next);
-            if (ns == null) continue;
+            if (ns == null || ns.out) continue;
             if (ns.skipNext) {
                 ns.skipNext = false;
                 pushLog(ns.username, "闭关中，跳过本回合");
@@ -483,13 +558,14 @@ public class MonopolyRoom {
         }
     }
 
-    /** 结算：按 gameStone 排名，奖池按比例发放 */
+    /** 结算：按真实灵石排名（仅未出局者），奖池按人数动态比例发放 */
     private void settle(long now) {
         state = State.ENDED;
         clearPending();
-        List<Seat> ranked = new ArrayList<>(seats);
-        ranked.sort((a, b) -> Integer.compare(b.gameStone, a.gameStone));
-        double[] ratio = {0.5, 0.3, 0.15, 0.05};
+        List<Seat> ranked = new ArrayList<>();
+        for (Seat s : seats) if (!s.out) ranked.add(s);
+        ranked.sort((a, b) -> Integer.compare(realStone(b.username), realStone(a.username)));
+        double[] ratio = payoutRatio(ranked.size());
         List<ResultRow> rows = new ArrayList<>();
         for (int i = 0; i < ranked.size(); i++) {
             Seat s = ranked.get(i);
@@ -501,10 +577,18 @@ public class MonopolyRoom {
                 u.setSpiritStone(stones + payout);
                 userRepository.save(u);
             }
-            rows.add(new ResultRow(s.username, s.gameStone, i + 1, payout, net));
+            rows.add(new ResultRow(s.username, realStone(s.username) + payout, i + 1, payout, net));
         }
         result = rows;
         pushLog("系统", "灵石夺宝结束，奖池 " + pool + " 灵石已按名次发放");
+    }
+
+    /** 按在场人数返回奖池分配比例（合计为 1） */
+    private static double[] payoutRatio(int n) {
+        if (n >= 4) return new double[]{0.5, 0.3, 0.15, 0.05};
+        if (n == 3) return new double[]{0.5, 0.3, 0.2};
+        if (n == 2) return new double[]{0.6, 0.4};
+        return new double[]{1.0};
     }
 
     // ===== 生成状态快照 =====
@@ -553,8 +637,9 @@ public class MonopolyRoom {
                 m.put("username", s.username);
                 m.put("realm", s.realm);
                 m.put("position", s.position);
-                m.put("gameStone", s.gameStone);
+                m.put("gameStone", realStone(s.username));
                 m.put("skipNext", s.skipNext);
+                m.put("out", s.out);
                 m.put("isYou", me != null && me.equals(s.username));
             } else {
                 m.put("username", "");
@@ -562,6 +647,7 @@ public class MonopolyRoom {
                 m.put("position", -1);
                 m.put("gameStone", 0);
                 m.put("skipNext", false);
+                m.put("out", false);
                 m.put("isYou", false);
             }
             m.put("seat", i);
@@ -625,7 +711,25 @@ public class MonopolyRoom {
         you.put("isMyTurn", isMyTurn);
         you.put("canRoll", isMyTurn && state == State.PLAYING && pendingUsername == null);
         you.put("canDecide", state == State.PLAYING && pendingUsername != null && me != null && me.equals(pendingUsername));
+        boolean voted = voteEndActive && me != null && (voteEndYes.contains(me) || voteEndNo.contains(me));
+        you.put("canVote", voteEndActive && me != null && joinedFlag && !voted);
+        you.put("votedYes", voteEndActive && me != null && voteEndYes.contains(me));
+        you.put("votedNo", voteEndActive && me != null && voteEndNo.contains(me));
         out.put("you", you);
+
+        // 结束投票状态
+        if (voteEndActive) {
+            Map<String, Object> v = new LinkedHashMap<>();
+            v.put("active", true);
+            v.put("initiator", voteEndInitiator);
+            v.put("yes", new ArrayList<>(voteEndYes));
+            v.put("no", new ArrayList<>(voteEndNo));
+            v.put("total", activeCount());
+            v.put("need", activeCount() / 2 + 1);
+            out.put("vote", v);
+        } else {
+            out.put("vote", null);
+        }
 
         if (result != null) {
             out.put("result", result.stream().map(r -> {
@@ -660,6 +764,11 @@ public class MonopolyRoom {
         log = new ArrayList<>();
         props.clear();
         clearPending();
+        voteEndActive = false;
+        voteEndYes.clear();
+        voteEndNo.clear();
+        voteEndInitiator = null;
+        voteEndSince = 0;
         return null;
     }
 
@@ -691,4 +800,57 @@ public class MonopolyRoom {
     }
 
     private long now() { return System.currentTimeMillis(); }
+
+    /** 读取玩家当前真实灵石余额（实时从账号取，因为游戏外操作也会增减灵石） */
+    private int realStone(String username) {
+        User u = userRepository.findByUsername(username).orElse(null);
+        if (u == null) return 0;
+        return u.getSpiritStone() != null ? u.getSpiritStone() : 0;
+    }
+
+    /** 调整玩家真实灵石（持久化到账号，最低为 0），返回调整后的真实余额 */
+    private int adjustReal(String username, int delta) {
+        User u = userRepository.findByUsername(username).orElse(null);
+        if (u == null) return 0;
+        int cur = u.getSpiritStone() != null ? u.getSpiritStone() : 0;
+        int next = cur + delta;
+        if (next < 0) next = 0;
+        u.setSpiritStone(next);
+        userRepository.save(u);
+        return next;
+    }
+
+    /** 直接对玩家真实灵石记账（唯一账本，无局内/真实之分）：
+     *  扣减时若余额不足则扣到 0；返回实际发生的增减额。
+     *  若对局中某玩家真实灵石因此降至 0（灵石耗尽），则将其判负出局。 */
+    private int changeOwn(Seat s, int delta) {
+        int before = realStone(s.username);
+        int applied = delta;
+        if (before + applied < 0) applied = -before;
+        int newReal = adjustReal(s.username, applied);
+        if (state == State.PLAYING && !s.out && applied < 0 && newReal <= 0) {
+            markOut(s, "灵石耗尽，黯然离场");
+        }
+        return applied;
+    }
+
+    /** 当前仍在场（未出局）的玩家数 */
+    private int activeCount() {
+        int n = 0;
+        for (Seat s : seats) if (!s.out) n++;
+        return n;
+    }
+
+    /** 玩家灵石耗尽出局：标记 out、清待处理；若在场不足 2 人（含）则直接结算本局 */
+    private void markOut(Seat s, String reason) {
+        if (s.out) return;
+        s.out = true;
+        joined.remove(s.username);
+        pushLog(s.username, reason);
+        if (pendingUsername != null && pendingUsername.equals(s.username)) clearPending();
+        if (activeCount() <= 2) {
+            pushLog("系统", "在场人数不足，本局提前结束");
+            settle(now());
+        }
+    }
 }

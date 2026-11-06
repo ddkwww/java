@@ -165,7 +165,8 @@ public class AuctionSession {
             startLot(now);
         } else {
             state = State.ENDED;
-            nextOpenAt = lastOpenAt + AUCTION_INTERVAL_MS;
+            // 拍卖结束后，下一轮从「结束时刻」起重新计时 10 分钟，保证倒计时始终是完整的 10 分钟
+            nextOpenAt = now + AUCTION_INTERVAL_MS;
             lots = new ArrayList<>();
             // 本轮结束，清空报名者，下一轮开始时可重新「参与本场」
             participants.clear();

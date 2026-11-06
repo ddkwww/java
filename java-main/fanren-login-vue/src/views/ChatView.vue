@@ -38,13 +38,25 @@
               class="msg"
               :class="m.mine ? 'mine' : 'theirs'"
             >
-              <div class="msg-bubble">{{ m.content }}</div>
+              <template v-if="m.type === 'GIFT'">
+                <div class="msg-gift">
+                  <span class="gift-emoji">🎁</span>
+                  <span class="gift-text">
+                    {{ m.mine ? '你赠予了' : (m.from + ' 赠予你') }}
+                    <b class="gift-num">{{ m.stone }}</b> 灵石
+                  </span>
+                </div>
+              </template>
+              <template v-else>
+                <div class="msg-bubble" :class="{ err: m.err }">{{ m.content }}</div>
+              </template>
               <div class="msg-meta">{{ m.time }}</div>
             </div>
           </template>
         </div>
 
         <footer class="cm-input">
+          <button class="cm-gift-btn" title="赠送灵石" @click="openGift">赠 灵</button>
           <input
             v-model="draft"
             class="cm-field"
@@ -61,6 +73,28 @@
         <p>选择左侧好友开始论道</p>
       </div>
     </section>
+
+    <!-- 赠送灵石弹窗 -->
+    <div v-if="giftOpen" class="gift-mask" @click.self="closeGift">
+      <div class="gift-panel">
+        <h3 class="gp-title">赠 灵</h3>
+        <p class="gp-peer">赠予道友 <b>{{ peer }}</b></p>
+        <p class="gp-balance">我的灵石：<b class="gp-num">{{ myStone }}</b></p>
+        <input
+          v-model.number="giftAmount"
+          class="gp-field"
+          type="number"
+          min="1"
+          placeholder="输入赠送数量"
+          @keyup.enter="doGift"
+        />
+        <p v-if="giftErr" class="gp-err">{{ giftErr }}</p>
+        <div class="gp-actions">
+          <button class="gp-cancel" @click="closeGift">取 消</button>
+          <button class="gp-ok" :disabled="gifting" @click="doGift">确 认</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -68,9 +102,11 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { listFriends } from '../api/friend'
-import { sendMessage, getHistory, getUnread, markRead } from '../api/chat'
+import { sendMessage, getHistory, getUnread, markRead, giftStone } from '../api/chat'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
+const auth = useAuthStore()
 
 const friends = ref([])
 const peer = ref('')
@@ -80,6 +116,14 @@ const loading = ref(false)
 const sending = ref(false)
 const unread = ref({})
 const msgBox = ref(null)
+
+// 赠灵弹窗状态
+const giftOpen = ref(false)
+const giftAmount = ref(null)
+const giftErr = ref('')
+const gifting = ref(false)
+
+const myStone = computed(() => auth.spiritStone)
 
 let pollTimer = null
 
@@ -158,6 +202,44 @@ async function doSend() {
     messages.value.push({ from: selfName.value, to: peer.value, content: '（发送失败：' + (e.message || '') + '）', time: '', mine: true, err: true })
   } finally {
     sending.value = false
+  }
+}
+
+function openGift() {
+  if (!peer.value) return
+  giftAmount.value = null
+  giftErr.value = ''
+  giftOpen.value = true
+}
+
+function closeGift() {
+  giftOpen.value = false
+  giftAmount.value = null
+  giftErr.value = ''
+}
+
+async function doGift() {
+  if (!peer.value || gifting.value) return
+  const n = Math.floor(Number(giftAmount.value))
+  if (!Number.isFinite(n) || n <= 0) { giftErr.value = '请输入大于 0 的整数'; return }
+  if (n > myStone.value) { giftErr.value = '灵石不足，当前仅 ' + myStone.value; return }
+  giftErr.value = ''
+  gifting.value = true
+  try {
+    const res = await giftStone(peer.value, n)
+    // 同步导航栏余额
+    if (res.spiritStone != null) auth.setSpiritStone(res.spiritStone)
+    // 推送一条赠送消息（本地即时展示）
+    messages.value.push({
+      from: selfName.value, to: peer.value, content: '🎁 赠送 ' + n + ' 灵石',
+      type: 'GIFT', stone: n, time: res.time || '', mine: true
+    })
+    closeGift()
+    scrollBottom()
+  } catch (e) {
+    giftErr.value = e.message || '赠送失败'
+  } finally {
+    gifting.value = false
   }
 }
 
@@ -256,6 +338,65 @@ onUnmounted(() => {
 }
 .cm-send:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(233,200,120,.4); }
 .cm-send:disabled { opacity: .5; cursor: default; }
+
+/* 赠灵按钮 */
+.cm-gift-btn {
+  padding: 0 18px; border-radius: 12px; cursor: pointer;
+  font-family: inherit; font-size: 14px; letter-spacing: 2px; font-weight: 700; color: var(--qi);
+  border: 1px solid rgba(103,232,249,.4); background: transparent; transition: .2s;
+}
+.cm-gift-btn:hover { background: rgba(103,232,249,.12); box-shadow: 0 0 16px rgba(103,232,249,.3); }
+
+/* 礼物气泡 */
+.msg-gift {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px;
+  font-size: 15px; letter-spacing: 1px; color: var(--ink);
+  background: linear-gradient(135deg, rgba(233,200,120,.18), rgba(233,200,120,.08));
+  border: 1px solid rgba(233,200,120,.4);
+  box-shadow: 0 4px 16px rgba(233,200,120,.18);
+}
+.msg.mine .msg-gift { border-bottom-right-radius: 4px; }
+.msg.theirs .msg-gift { border-bottom-left-radius: 4px; }
+.gift-emoji { font-size: 22px; }
+.gift-num { color: var(--gold); font-size: 17px; margin: 0 2px; }
+
+/* 赠灵弹窗 */
+.gift-mask {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+  background: rgba(4,8,18,.6); backdrop-filter: blur(3px);
+}
+.gift-panel {
+  width: 320px; padding: 24px 22px; border-radius: 18px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(22,32,58,.96), rgba(10,16,32,.98));
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.gp-title { margin: 0; color: var(--gold); font-size: 20px; letter-spacing: 6px; text-align: center; }
+.gp-peer { margin: 0; color: var(--ink); font-size: 14px; letter-spacing: 1px; }
+.gp-peer b { color: var(--gold-2); }
+.gp-balance { margin: 0; color: var(--ink-dim); font-size: 13px; letter-spacing: 1px; }
+.gp-num { color: var(--qi); font-size: 15px; }
+.gp-field {
+  padding: 12px 14px; border-radius: 12px; color: var(--ink); font-family: inherit; font-size: 16px;
+  border: 1px solid var(--line); background: rgba(8,12,24,.6); outline: none; transition: .2s;
+}
+.gp-field:focus { border-color: rgba(233,200,120,.5); box-shadow: 0 0 14px rgba(233,200,120,.18); }
+.gp-err { margin: 0; color: #ff6b6b; font-size: 12px; letter-spacing: 1px; }
+.gp-actions { display: flex; gap: 12px; margin-top: 4px; }
+.gp-cancel, .gp-ok {
+  flex: 1; padding: 11px 0; border-radius: 12px; cursor: pointer;
+  font-family: inherit; font-size: 15px; letter-spacing: 3px; font-weight: 700; transition: .2s;
+}
+.gp-cancel { color: var(--ink-dim); border: 1px solid var(--line); background: transparent; }
+.gp-cancel:hover { background: rgba(255,255,255,.05); }
+.gp-ok {
+  border: none; color: #0c1322;
+  background: linear-gradient(135deg, var(--gold-2), var(--gold) 50%, #c79a44);
+  box-shadow: 0 6px 18px rgba(233,200,120,.25);
+}
+.gp-ok:hover:not(:disabled) { transform: translateY(-1px); }
+.gp-ok:disabled { opacity: .5; cursor: default; }
 
 .cm-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--ink-dim); }
 .ph-seal {

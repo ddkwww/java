@@ -57,11 +57,15 @@ export async function decideGame(action) {
   return res.json()
 }
 
-// 提前结算
-export async function endGame() {
-  const res = await fetch(`${BASE}/api/game/monopoly/end`, {
+// 发起结束投票
+export const proposeEndGame = () => post('propose-end')
+
+// 结束投票表态：agree = true 赞成 / false 反对
+export async function voteEndGame(agree) {
+  const res = await fetch(`${BASE}/api/game/monopoly/vote-end`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeader() }
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ agree })
   })
   if (!res.ok) {
     let msg = '操作失败'

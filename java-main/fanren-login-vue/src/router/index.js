@@ -16,6 +16,7 @@ import ChatView from '../views/ChatView.vue'
 import AuctionView from '../views/AuctionView.vue'
 import GamesView from '../views/GamesView.vue'
 import MonopolyView from '../views/MonopolyView.vue'
+import ChangePasswordView from '../views/ChangePasswordView.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
@@ -28,6 +29,7 @@ const routes = [
   { path: '/auction', name: 'auction', component: AuctionView, meta: { requiresAuth: true } },
   { path: '/games', name: 'games', component: GamesView, meta: { requiresAuth: true } },
   { path: '/games/monopoly', name: 'monopoly', component: MonopolyView, meta: { requiresAuth: true } },
+  { path: '/change-password', name: 'change-password', component: ChangePasswordView, meta: { requiresAuth: true } },
   { path: '/manual/:id', name: 'manual', component: SutraDetailView, meta: { requiresAuth: true } },
   { path: '/treasure/:id', name: 'treasure', component: TreasureDetailView, meta: { requiresAuth: true } },
   // 藏经阁 / 法宝阁：独立页面（由同一 CollectionView 按 meta.type 区分）

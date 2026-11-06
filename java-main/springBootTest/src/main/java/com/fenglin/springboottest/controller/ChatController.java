@@ -17,9 +17,10 @@ import java.util.*;
 /**
  * 好友聊天接口（鉴权复用共享 TokenStore）：
  *   POST /api/chat/send     {to, content} -> 发送消息（仅限好友）
- *   GET  /api/chat/history?peer=   -> 与某好友的完整历史（时间正序）
+ *   GET  /api/chat/history?peer=   -> 与某好友的完整历史（时间正序，含 type/stone）
  *   GET  /api/chat/unread          -> 每个好友发来的未读消息数（供红点/角标）
  *   POST /api/chat/read     {peer} -> 标记与某好友的会话已读
+ *   POST /api/chat/gift     {to, amount} -> 向好友赠送灵石（扣己加彼，留 GIFT 消息）
  */
 @RestController
 @RequestMapping("/api/chat")
@@ -74,6 +75,57 @@ public class ChatController {
         return ResponseEntity.ok(out);
     }
 
+    /** 向好友赠送灵石（扣发送方、加接收方，并以 GIFT 消息留存于双方聊天记录） */
+    @PostMapping("/gift")
+    public ResponseEntity<?> gift(@RequestHeader(value = "Authorization", required = false) String auth,
+                                  @RequestBody Map<String, Object> body) {
+        User me = resolveUser(auth);
+        if (me == null) return unauthorized();
+
+        Object toObj = body.get("to");
+        Object amountObj = body.get("amount");
+        if (toObj == null || String.valueOf(toObj).isBlank()) return bad("请指定赠送对象");
+        String to = String.valueOf(toObj).trim();
+        if (to.equals(me.getUsername())) return bad("不能赠送给自己");
+        if (userRepository.findByUsername(to).isEmpty()) return bad("对方不存在");
+        if (!isFriend(me.getUsername(), to)) return bad("你们还不是好友，无法赠送");
+
+        int amount;
+        try {
+            amount = Integer.parseInt(String.valueOf(amountObj));
+        } catch (Exception e) {
+            return bad("赠送数量必须是正整数");
+        }
+        if (amount <= 0) return bad("赠送数量必须大于 0");
+
+        int myStones = me.getSpiritStone() != null ? me.getSpiritStone() : 0;
+        if (myStones < amount) return bad("灵石不足，当前仅 " + myStones + " 灵石");
+
+        // 转账：扣发送方、加接收方（持久化）
+        me.setSpiritStone(myStones - amount);
+        User peer = userRepository.findByUsername(to).orElseThrow();
+        int peerStones = peer.getSpiritStone() != null ? peer.getSpiritStone() : 0;
+        peer.setSpiritStone(peerStones + amount);
+        userRepository.save(me);
+        userRepository.save(peer);
+
+        // 留存一条赠送消息（双方历史可见，接收方会收到未读红点）
+        Message m = new Message();
+        m.setFromUser(me.getUsername());
+        m.setToUser(to);
+        m.setType("GIFT");
+        m.setStone(amount);
+        m.setContent("🎁 赠送 " + amount + " 灵石");
+        messageRepository.save(m);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("message", "已赠送 " + amount + " 灵石给 " + to);
+        out.put("spiritStone", me.getSpiritStone());
+        out.put("to", to);
+        out.put("amount", amount);
+        return ResponseEntity.ok(out);
+    }
+
     /** 与某好友的历史消息（时间正序） */
     @GetMapping("/history")
     public ResponseEntity<?> history(@RequestHeader(value = "Authorization", required = false) String auth,
@@ -83,8 +135,7 @@ public class ChatController {
         if (peer == null || peer.isBlank()) return bad("缺少对方用户名");
 
         List<Message> msgs = messageRepository
-                .findByFromUserAndToUserOrFromUserAndToUserOrderByCreatedAtAsc(
-                        me.getUsername(), peer, peer, me.getUsername());
+                .findConversation(me.getUsername(), peer, peer, me.getUsername());
 
         List<Map<String, Object>> list = new ArrayList<>();
         for (Message m : msgs) {
@@ -92,6 +143,8 @@ public class ChatController {
             item.put("from", m.getFromUser());
             item.put("to", m.getToUser());
             item.put("content", m.getContent());
+            item.put("type", m.getType() != null ? m.getType() : "TEXT");
+            item.put("stone", m.getStone());
             item.put("time", m.getCreatedAt() != null ? m.getCreatedAt().format(FMT) : "");
             item.put("mine", m.getFromUser().equals(me.getUsername()));
             list.add(item);

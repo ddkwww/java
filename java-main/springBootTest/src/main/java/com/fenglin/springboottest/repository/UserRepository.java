@@ -1,6 +1,8 @@
 package com.fenglin.springboottest.repository;
 
 import com.fenglin.springboottest.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
@@ -14,6 +16,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 好友搜索：按用户名模糊匹配（忽略大小写） */
     List<User> findByUsernameContainingIgnoreCase(String keyword);
+
+    /** 后台用户管理：按用户名模糊匹配（忽略大小写），分页 */
+    Page<User> findByUsernameContainingIgnoreCase(String keyword, Pageable pageable);
 
     boolean existsByUsername(String username);
 

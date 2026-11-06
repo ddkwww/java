@@ -12,12 +12,13 @@
       <nav class="sb-nav">
         <button class="sb-item" :class="{ active: tab === 'manual' }" type="button" @click="tab = 'manual'">功法列表</button>
         <button class="sb-item" :class="{ active: tab === 'treasure' }" type="button" @click="tab = 'treasure'">法宝列表</button>
+        <button class="sb-item" :class="{ active: tab === 'user' }" type="button" @click="tab = 'user'">用户管理</button>
         <router-link to="/" class="sb-item">返回首页</router-link>
         <button class="sb-item logout" type="button" @click="onLogout">退出登录</button>
       </nav>
       <div class="sb-foot">
-        <div class="sb-stat"><b>{{ list.length }}</b> {{ tab === 'manual' ? '卷秘籍' : '件法宝' }}</div>
-        <div class="sb-stat"><b>{{ (tab === 'manual' ? categories : treasureCategories).length }}</b> 类{{ tab === 'manual' ? '功法' : '法宝' }}</div>
+        <div class="sb-stat"><b>{{ sbCount }}</b> {{ sbCountLabel }}</div>
+        <div class="sb-stat"><b>{{ (tab === 'manual' ? categories : tab === 'treasure' ? treasureCategories : []).length }}</b> 类{{ tab === 'manual' ? '功法' : tab === 'treasure' ? '法宝' : '—' }}</div>
       </div>
     </aside>
 
@@ -28,7 +29,7 @@
         <span class="seal">藏</span>
         <div>
           <div class="t1">藏经阁 · 后台管理系统</div>
-          <div class="t2">{{ tab === 'manual' ? '功法秘籍数据管理（增删改查）' : '法宝珍奇数据管理（增删改查）' }}</div>
+          <div class="t2">{{ tabSub }}</div>
         </div>
       </div>
       <div class="actions">
@@ -42,14 +43,54 @@
     <div class="toolbar">
       <div class="search">
         <span class="si">寻</span>
-        <input v-model="keyword" type="text" :placeholder="tab === 'manual' ? '按名称 / 分类 / 出处 搜索…' : '按名称 / 类别 / 出处 搜索…'" @keyup.enter="load" />
+        <input v-model="keyword" type="text" :placeholder="searchPlaceholder" @keyup.enter="load" />
       </div>
-      <button class="btn-add" @click="openCreate">＋ 新增{{ tab === 'manual' ? '功法' : '法宝' }}</button>
+      <button v-if="tab !== 'user'" class="btn-add" @click="openCreate">＋ 新增{{ tab === 'manual' ? '功法' : '法宝' }}</button>
     </div>
 
     <!-- 表格 -->
     <div class="panel">
-      <table class="grid">
+      <!-- 用户管理表格 -->
+      <table v-if="tab === 'user'" class="grid">
+        <thead>
+          <tr>
+            <th class="c-id">ID</th>
+            <th>用户名</th>
+            <th>权限</th>
+            <th>境界</th>
+            <th>灵石</th>
+            <th>灵气</th>
+            <th>寿元</th>
+            <th>注册时间</th>
+            <th class="c-op">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="it in filtered" :key="it.id">
+            <td class="c-id">{{ it.id }}</td>
+            <td class="name">{{ it.username }}</td>
+            <td>
+              <span class="perm" :class="it.permission === 0 ? 'p-admin' : 'p-user'">
+                {{ it.permission === 0 ? '管理员' : '普通' }}
+              </span>
+            </td>
+            <td>{{ it.realm }}</td>
+            <td class="num">{{ it.spiritStone }}</td>
+            <td class="num">{{ it.spiritQi }}</td>
+            <td class="num">{{ it.lifespan }}</td>
+            <td class="dim">{{ it.createdAt }}</td>
+            <td class="c-op">
+              <button class="op edit" @click="openEdit(it)">编辑</button>
+            </td>
+          </tr>
+          <tr v-if="!loading && !filtered.length">
+            <td colspan="9" class="empty">未找到匹配的用户。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 功法/法宝表格 -->
+      <table v-else class="grid">
         <thead>
           <tr>
             <th class="c-id">ID</th>
@@ -81,7 +122,9 @@
       </table>
 
       <div v-if="loading" class="loading">读取中…</div>
-      <div class="count">共 {{ filtered.length }} {{ tab === 'manual' ? '卷' : '件' }}</div>
+      <div class="count">
+        {{ tab === 'user' ? '共 ' + userTotal + ' 位用户' : '共 ' + filtered.length + (tab === 'manual' ? ' 卷' : ' 件') }}
+      </div>
     </div>
 
     </div>
@@ -108,27 +151,41 @@
       @submit="onSubmitted"
     />
 
+    <!-- 用户编辑弹窗 -->
+    <UserFormModal
+      v-if="tab === 'user'"
+      :visible="modalVisible"
+      :editing="editing"
+      :saving="saving"
+      @close="onModalClose"
+      @submit="onUserSubmitted"
+    />
+
     <Toast :message="toastMsg" :visible="toastVisible" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { fetchManuals, fetchFacets, createManual, updateManual, deleteManual } from '../api/sutra'
 import { fetchTreasures, fetchTreasureFacets, createTreasure, updateTreasure, deleteTreasure } from '../api/treasure'
+import { fetchUsers, updateUser } from '../api/admin'
 import ManualFormModal from '../components/ManualFormModal.vue'
 import TreasureFormModal from '../components/TreasureFormModal.vue'
+import UserFormModal from '../components/UserFormModal.vue'
 import Toast from '../components/Toast.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
 
-const tab = ref('manual')                 // 'manual' | 'treasure'
+const tab = ref('manual')                 // 'manual' | 'treasure' | 'user'
 const manualList = ref([])
 const treasureList = ref([])
-const list = computed(() => (tab.value === 'manual' ? manualList.value : treasureList.value))
+const userList = ref([])
+const userTotal = ref(0)
+const list = computed(() => (tab.value === 'manual' ? manualList.value : tab.value === 'treasure' ? treasureList.value : userList.value))
 
 const loading = ref(false)
 const keyword = ref('')
@@ -148,7 +205,23 @@ function toast(msg) {
   toastTimer = setTimeout(() => (toastVisible.value = false), 2200)
 }
 
+const tabSub = computed(() => {
+  if (tab.value === 'manual') return '功法秘籍数据管理（增删改查）'
+  if (tab.value === 'treasure') return '法宝珍奇数据管理（增删改查）'
+  return '用户账号数据管理（查看 / 编辑 / 重置密码）'
+})
+
+const searchPlaceholder = computed(() => {
+  if (tab.value === 'manual') return '按名称 / 分类 / 出处 搜索…'
+  if (tab.value === 'treasure') return '按名称 / 类别 / 出处 搜索…'
+  return '按用户名搜索…'
+})
+
+const sbCount = computed(() => (tab.value === 'user' ? userTotal.value : list.value.length))
+const sbCountLabel = computed(() => (tab.value === 'user' ? '位用户' : tab.value === 'manual' ? '卷秘籍' : '件法宝'))
+
 const filtered = computed(() => {
+  if (tab.value === 'user') return userList.value // 用户列表由后端分页，本地不做二次过滤
   const k = keyword.value.trim().toLowerCase()
   if (!k) return list.value
   return list.value.filter((m) =>
@@ -160,22 +233,34 @@ const filtered = computed(() => {
 async function load() {
   loading.value = true
   try {
-    const [m, mf, t, tf] = await Promise.all([
-      fetchManuals({}),
-      fetchFacets(),
-      fetchTreasures({}),
-      fetchTreasureFacets()
-    ])
-    manualList.value = m.items || []
-    categories.value = mf.categories || []
-    treasureList.value = t.items || []
-    treasureCategories.value = tf.categories || []
+    if (tab.value === 'user') {
+      const d = await fetchUsers({ keyword: keyword.value.trim(), page: 1, size: 200 })
+      userList.value = d.items
+      userTotal.value = d.total
+    } else {
+      const [m, mf, t, tf] = await Promise.all([
+        fetchManuals({}),
+        fetchFacets(),
+        fetchTreasures({}),
+        fetchTreasureFacets()
+      ])
+      manualList.value = m.items || []
+      categories.value = mf.categories || []
+      treasureList.value = t.items || []
+      treasureCategories.value = tf.categories || []
+    }
   } catch (e) {
     toast(e.message || '读取失败')
   } finally {
     loading.value = false
   }
 }
+
+// 切换 Tab 时重置关键词并加载对应数据
+watch(tab, () => {
+  keyword.value = ''
+  load()
+})
 
 function openCreate() {
   editing.value = null
@@ -213,6 +298,20 @@ async function onSubmitted(payload) {
     await load()
   } catch (e) {
     toast(e.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function onUserSubmitted(payload) {
+  saving.value = true
+  try {
+    const res = await updateUser(editing.value.id, payload)
+    toast(res.message || ('已更新：' + editing.value.username))
+    modalVisible.value = false
+    await load()
+  } catch (e) {
+    toast(e.message || '更新失败')
   } finally {
     saving.value = false
   }
@@ -347,6 +446,12 @@ onUnmounted(() => clearTimeout(toastTimer))
 .empty{text-align:center;color:var(--ink-dim);letter-spacing:3px;padding:40px 0}
 .loading{text-align:center;color:var(--ink-dim);letter-spacing:3px;padding:24px 0}
 .count{padding:12px 16px 0;color:var(--ink-dim);font-size:13px;letter-spacing:2px}
+
+/* 用户表格 */
+.num{font-variant-numeric:tabular-nums;color:var(--qi)}
+.perm{padding:3px 10px;border-radius:6px;font-weight:700;font-size:13px}
+.perm.p-admin{color:#0c1322;background:linear-gradient(135deg,var(--gold-2),var(--gold))}
+.perm.p-user{color:var(--ink-dim);background:rgba(139,155,189,.18);border:1px solid var(--line)}
 
 /* 侧边栏内部样式 */
 .sb-brand{display:flex;align-items:center;gap:12px;padding:4px 6px 18px;border-bottom:1px solid var(--line);margin-bottom:14px}

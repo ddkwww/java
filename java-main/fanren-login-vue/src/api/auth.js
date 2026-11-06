@@ -11,6 +11,8 @@
 // POST /api/admin/login body: { username, password } → 仅 permission=0 可成功，否则 403
 // GET  /api/me        Header Authorization: Bearer <token> → 200 { username, realm, level, permission }
 // POST /api/logout    Header Authorization: Bearer <token> → 200 { ok:true }
+// POST /api/change-password  Header Authorization: Bearer <token> + body { oldPassword, newPassword }
+//                      成功 200 { message }；失败 401 未登录 / 400 原密码错误·新密码不合规范·与原密码相同
 const BASE = import.meta.env.VITE_API_BASE || ''
 
 // 从本地读取 token，自动附加到请求头（登录后访问受保护接口必需）
@@ -76,4 +78,12 @@ export async function getProfile() {
 
 export async function logout() {
   return request('/api/logout', { method: 'POST' })
+}
+
+// 修改密码（需登录）：oldPassword/newPassword，后端校验原密码并哈希存储新密码
+export async function changePassword(oldPassword, newPassword) {
+  return request('/api/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ oldPassword, newPassword })
+  })
 }

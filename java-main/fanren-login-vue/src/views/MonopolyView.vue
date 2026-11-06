@@ -3,11 +3,12 @@
     <header class="mp-head">
       <h1>大富翁 · 灵石夺宝</h1>
       <div class="mp-head-right">
+        <div class="mp-mystone">🪙 我的灵石 {{ myStone }}</div>
         <div class="mp-pool">
           <span class="pool-dot">灵</span>
           奖池 {{ state.pool }} 灵石 · 报名费 {{ state.entryFee }}
         </div>
-        <button v-if="state.state === 'PLAYING'" class="btn-danger" @click="doEnd">结束本局</button>
+        <button v-if="state.state === 'PLAYING'" class="btn-danger" :disabled="state.vote && state.vote.active" @click="doProposeEnd">结束本局</button>
       </div>
     </header>
 
@@ -63,7 +64,13 @@
           </template>
           <span v-else class="t-desc">{{ shortDesc(t.type) }}</span>
           <span class="t-pawns">
-            <span v-for="(p, i) in playersOnTile(t.index)" :key="i" class="pawn" :style="pawnStyle(p.seat)">
+            <span
+              v-for="p in playersOnTile(t.index)"
+              :key="p.seat"
+              class="pawn"
+              :class="{ moving: movingSeats[p.seat], cur: p.seat === state.currentSeat }"
+              :style="pawnStyle(p.seat)"
+            >
               {{ avatarOf(p.seat) }}
             </span>
           </span>
@@ -92,7 +99,7 @@
           <button class="btn-gold btn-roll" :disabled="!you.canRoll || rolling" @click="doRoll">
             {{ you.isMyTurn ? '掷 骰 子' : '等待他人行动…' }}
           </button>
-          <button class="btn-danger-outline" @click="doEnd">结束本局（提前结算）</button>
+          <button class="btn-danger-outline" :disabled="state.vote && state.vote.active" @click="doProposeEnd">发起结束投票</button>
 
           <div class="ct-progress">已掷 {{ state.rollsDone }} / {{ state.maxRolls }} 次</div>
           <div v-if="state.lastEvent" class="ct-event" :class="state.lastEvent.delta >= 0 ? 'up' : 'down'">
@@ -107,12 +114,13 @@
           v-for="(p, i) in state.players"
           :key="i"
           class="pb"
-          :class="{ me: p.isYou, cur: i === state.currentSeat, empty: !p.username }"
+          :class="{ me: p.isYou, cur: i === state.currentSeat, empty: !p.username, out: p.out }"
         >
           <span class="pb-avatar" :style="avatarStyle(i)">{{ avatarOf(i) }}</span>
           <span class="pb-name">{{ p.username || '—' }}</span>
-          <span class="pb-stone">🪙 {{ p.gameStone }}</span>
-          <span class="pb-own" v-if="p.username">矿 {{ ownedCount(p.username) }}</span>
+          <span v-if="p.out" class="pb-out">出局</span>
+          <span v-else class="pb-stone">🪙 {{ p.gameStone }}</span>
+          <span class="pb-own" v-if="p.username && !p.out">矿 {{ ownedCount(p.username) }}</span>
         </div>
       </div>
 
@@ -134,7 +142,7 @@
         <div v-for="r in state.result" :key="r.username" class="rank-row" :class="'rk-' + r.rank">
           <span class="rk-no">{{ r.rank }}</span>
           <span class="rk-name">{{ r.username }}</span>
-          <span class="rk-stone">局内 {{ r.gameStone }} 灵石</span>
+          <span class="rk-stone">结余 {{ r.gameStone }} 灵石</span>
           <span class="rk-pay">发放 {{ r.payout }}</span>
           <span class="rk-net" :class="r.net >= 0 ? 'up' : 'down'">
             {{ r.net >= 0 ? '+' : '' }}{{ r.net }} 灵石
@@ -157,11 +165,11 @@
             升级「{{ state.pending.tileName }}」？
           </h3>
           <p class="dc-desc" v-if="state.pending.type === 'OCCUPY'">
-            占领需花费 <b>{{ state.pending.price }}</b> 局内灵石；
+            占领需花费 <b>{{ state.pending.price }}</b> 灵石；
             此后其他道友落上此矿需支付租金 <b>{{ state.pending.rent }}</b>。
           </p>
           <p class="dc-desc" v-else>
-            当前 Lv.{{ state.pending.level }}，升级需 <b>{{ state.pending.cost }}</b> 局内灵石，
+            当前 Lv.{{ state.pending.level }}，升级需 <b>{{ state.pending.cost }}</b> 灵石，
             租金将提升至 <b>{{ state.pending.rent }}</b>。
           </p>
           <div class="dc-actions">
@@ -173,8 +181,37 @@
       </div>
     </transition>
 
+    <!-- ===== 结束投票横幅（不阻塞游戏，可继续行动） ===== -->
+    <transition name="vote">
+      <div v-if="state.vote && state.vote.active" class="vote-banner">
+        <span class="vb-icon">🗳️</span>
+        <span class="vb-text">
+          <b>{{ state.vote.initiator }}</b> 提议结束本局 · 需 <b>{{ state.vote.need }}</b> 票赞成（已赞成 {{ state.vote.yes.length }}/{{ state.vote.total }}）
+        </span>
+        <span v-if="you.canVote" class="vb-actions">
+          <button class="btn-gold vb-btn" @click="doVote(true)">赞成</button>
+          <button class="btn-ghost vb-btn" @click="doVote(false)">拒绝</button>
+        </span>
+        <span v-else-if="you.votedYes" class="vb-status ok">你已赞成 ✓</span>
+        <span v-else-if="you.votedNo" class="vb-status no">你已拒绝 ✗</span>
+      </div>
+    </transition>
+
     <transition name="toast">
       <div v-if="toast.visible" class="g-toast" :class="toast.type">{{ toast.msg }}</div>
+    </transition>
+
+    <!-- ===== 落格效果弹窗（明显 + 动画） ===== -->
+    <transition name="fx">
+      <div v-if="effectPopup.visible" class="fx-pop" :class="fxClass">
+        <div class="fx-icon">{{ effectPopup.icon }}</div>
+        <div class="fx-title" v-if="effectPopup.name">{{ effectPopup.name }} 踩中「{{ effectPopup.tileName }}」</div>
+        <div class="fx-title" v-else>踩中「{{ effectPopup.tileName }}」</div>
+        <div class="fx-text">{{ effectPopup.text }}</div>
+        <div v-if="effectPopup.delta !== 0" class="fx-delta" :class="effectPopup.delta >= 0 ? 'up' : 'down'">
+          {{ effectPopup.delta >= 0 ? '+' : '' }}{{ effectPopup.delta }} 灵石
+        </div>
+      </div>
     </transition>
   </div>
 </template>
@@ -182,7 +219,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { fetchGameState, joinGame, leaveGame, startGame, rollDice, resetGame, decideGame, endGame } from '../api/game'
+import { fetchGameState, joinGame, leaveGame, startGame, rollDice, resetGame, decideGame, proposeEndGame, voteEndGame } from '../api/game'
 
 const auth = useAuthStore()
 const state = reactive({
@@ -194,6 +231,28 @@ const state = reactive({
 const myStone = ref(0)
 const rolling = ref(false)
 const diceFace = ref(0)
+
+// 客户端显示位置（与服务器 position 解耦，用于走路动画）
+const displayPos = reactive({})
+const movingSeats = reactive({})
+const effectPopup = reactive({ visible: false, icon: '', tileName: '', name: '', text: '', delta: 0 })
+const fxClass = computed(() => {
+  const d = effectPopup.delta
+  if (d > 0) return 'fx-up'
+  if (d < 0) return 'fx-down'
+  return 'fx-neutral'
+})
+let effectTimer = null
+function showEffect({ name, icon, tileName, text, delta }) {
+  effectPopup.icon = icon
+  effectPopup.tileName = tileName
+  effectPopup.name = name
+  effectPopup.text = text
+  effectPopup.delta = delta
+  effectPopup.visible = true
+  if (effectTimer) clearTimeout(effectTimer)
+  effectTimer = setTimeout(() => { effectPopup.visible = false }, 2600)
+}
 
 // 人物形象（按座位）与配色
 const AVATARS = ['🧙', '🧛', '🧝', '🥷']
@@ -252,10 +311,60 @@ const myName = computed(() => {
 })
 
 function playersOnTile(idx) {
-  return (state.players || []).filter(p => p.username && p.position === idx)
+  return (state.players || []).filter(p => p.username && !p.out && displayPos[p.seat] === idx)
 }
 function ownedCount(username) {
   return (state.board || []).filter(t => t.owner === username).length
+}
+
+// 把客户端显示位置同步到服务器权威位置：差异时逐步走路（环形顺时针）
+function syncPositions() {
+  if (state.state !== 'PLAYING') {
+    Object.keys(movingSeats).forEach(k => delete movingSeats[k])
+    effectPopup.visible = false
+    ;(state.players || []).forEach(p => { if (p && p.username != null) displayPos[p.seat] = p.position })
+    return
+  }
+  ;(state.players || []).forEach(p => {
+    if (!p || !p.username || p.out) { delete displayPos[p.seat]; delete movingSeats[p.seat]; return }
+    const target = p.position
+    const cur = displayPos[p.seat]
+    if (cur === undefined) { displayPos[p.seat] = target; return } // 首次直接落位，不动画
+    if (cur === target) return
+    if (movingSeats[p.seat]) return // 已在走路，避免叠加
+    animateMove(p.seat, cur, target)
+  })
+}
+// 从 from 沿环形一格一格走到 to（顺时针最短路径），每步约 230ms
+function animateMove(seat, from, to) {
+  const steps = ((to - from) % 20 + 20) % 20
+  if (steps === 0) { displayPos[seat] = to; return }
+  movingSeats[seat] = true
+  let i = 0
+  const stepOnce = () => {
+    i++
+    displayPos[seat] = (from + i) % 20
+    if (i >= steps) {
+      delete movingSeats[seat]
+      onMoveComplete(seat, to)
+    } else {
+      setTimeout(stepOnce, 230)
+    }
+  }
+  setTimeout(stepOnce, 230)
+}
+// 走到终点后弹出明显的效果提示
+function onMoveComplete(seat, tileIndex) {
+  const p = (state.players || []).find(x => x.seat === seat)
+  const tile = (state.board || [])[tileIndex]
+  const ev = state.lastEvent
+  showEffect({
+    name: p ? p.username : '',
+    icon: tile ? tileIcon(tile.type) : '✨',
+    tileName: tile ? tile.name : '',
+    text: ev ? ev.text : '',
+    delta: ev ? ev.delta : 0
+  })
 }
 
 async function refresh() {
@@ -263,7 +372,9 @@ async function refresh() {
     const s = await fetchGameState()
     Object.assign(state, s)
     if (!rolling.value && s.dice && s.dice.value) diceFace.value = s.dice.value
+    await auth.fetchProfile().catch(() => {})
     myStone.value = auth.spiritStone
+    syncPositions()
   } catch (e) {
     showToast('牌桌状态获取失败：' + (e.message || '网络异常'), 'err')
   }
@@ -305,13 +416,21 @@ async function doDecide(action) {
   try { await decideGame(action); await refresh() }
   catch (e) { showToast(e.message || '操作失败', 'err') }
 }
-async function doEnd() {
-  if (!window.confirm('确定提前结算本局吗？将按当前局内灵石排名瓜分奖池。')) return
-  try { await endGame(); showToast('本局已结算', 'ok'); await refresh() }
-  catch (e) { showToast(e.message || '结束失败', 'err') }
+async function doProposeEnd() {
+  if (!window.confirm('确定发起「结束本局」投票吗？需过半数玩家赞成才会提前结算。')) return
+  try { await proposeEndGame(); showToast('已发起结束投票，等待众人表态', 'ok'); await refresh() }
+  catch (e) { showToast(e.message || '发起失败', 'err') }
+}
+async function doVote(agree) {
+  try { await voteEndGame(agree); showToast(agree ? '已投赞成' : '已投反对', 'ok'); await refresh() }
+  catch (e) { showToast(e.message || '投票失败', 'err') }
 }
 async function doReset() {
-  try { await resetGame(); showToast('牌桌已重置', 'ok'); await refresh() }
+  try {
+    Object.keys(movingSeats).forEach(k => delete movingSeats[k])
+    effectPopup.visible = false
+    await resetGame(); showToast('牌桌已重置', 'ok'); await refresh()
+  }
   catch (e) { showToast(e.message || '重置失败', 'err') }
 }
 
@@ -330,6 +449,9 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); if (toastTimer) cle
 .mp-head h1 { font-size: 26px; letter-spacing: 3px; font-weight: 700;
   background: linear-gradient(180deg, #fff7e6, var(--gold) 60%, #b98e34); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .mp-head-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mp-mystone { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px;
+  border: 1px solid rgba(233,200,120,.35); color: var(--gold-2); font-size: 14px; letter-spacing: 1px;
+  background: rgba(233,200,120,.06); font-weight: 700; }
 .mp-pool { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px;
   border: 1px solid rgba(233,200,120,.35); color: var(--gold-2); font-size: 14px; letter-spacing: 1px; background: rgba(233,200,120,.06); }
 .pool-dot { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
@@ -373,8 +495,17 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); if (toastTimer) cle
 .t-lv { color: var(--qi); }
 .t-rent { font-size: 10px; color: #7CFFB0; }
 .t-price { font-size: 10px; color: var(--gold-2); }
-.t-pawns { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: auto; }
-.pawn { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; border: 1.5px solid; }
+.t-pawns { display: flex; gap: 0; flex-wrap: wrap; justify-content: center; margin-top: auto; padding-bottom: 3px; }
+.pawn { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; border: 2.5px solid;
+  position: relative; box-shadow: 0 2px 8px rgba(0,0,0,.5); transition: transform .12s; }
+.pawn + .pawn { margin-left: -10px; }
+.pawn.cur { box-shadow: 0 0 0 2px #fff, 0 2px 10px rgba(0,0,0,.55); z-index: 2; }
+.pawn.moving { animation: pawnHop .25s ease; z-index: 3; }
+@keyframes pawnHop {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-10px) scale(1.12); }
+  100% { transform: translateY(0) scale(1); }
+}
 
 .t-START { border-color: rgba(233,200,120,.6); background: linear-gradient(160deg, rgba(233,200,120,.28), rgba(13,20,38,.8)); }
 .t-MINE { border-color: rgba(103,232,249,.45); }
@@ -426,6 +557,8 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); if (toastTimer) cle
 .players-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px auto 0; max-width: 720px; }
 .pb { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(13,20,38,.5); font-size: 13px; }
 .pb.empty { opacity: .4; }
+.pb.out { opacity: .45; filter: grayscale(1); border-color: var(--line); }
+.pb-out { color: #ff8a8a; font-size: 11px; border: 1px solid rgba(255,138,138,.5); padding: 1px 6px; border-radius: 6px; }
 .pb.me { border-color: var(--gold); }
 .pb.cur { background: rgba(103,232,249,.12); border-color: rgba(103,232,249,.5); }
 .pb-avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; border: 2px solid; flex-shrink: 0; }
@@ -464,6 +597,20 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); if (toastTimer) cle
 .dc-desc { font-size: 14px; color: var(--ink-dim); line-height: 1.8; margin-bottom: 20px; }
 .dc-desc b { color: var(--gold-2); }
 .dc-actions { display: flex; gap: 12px; justify-content: center; }
+.vote-banner { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 9400;
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 14px; flex-wrap: wrap; justify-content: center;
+  background: linear-gradient(180deg, rgba(16,23,44,.97), rgba(8,12,24,.97));
+  border: 1px solid rgba(255,138,138,.5); box-shadow: 0 12px 40px rgba(0,0,0,.5); max-width: 94vw; }
+.vb-icon { font-size: 20px; }
+.vb-text { font-size: 14px; color: var(--ink-dim); }
+.vb-text b { color: var(--gold-2); }
+.vb-actions { display: flex; gap: 8px; }
+.vb-btn { padding: 6px 14px; font-size: 13px; letter-spacing: 1px; }
+.vb-status { font-size: 14px; }
+.vb-status.ok { color: #7CFFB0; }
+.vb-status.no { color: #ff8a8a; }
+.vote-enter-active, .vote-leave-active { transition: all .3s ease; }
+.vote-enter-from, .vote-leave-to { opacity: 0; transform: translate(-50%, -16px); }
 
 /* 按钮 */
 .btn-primary, .btn-gold, .btn-ghost, .btn-danger, .btn-danger-outline, .btn-roll { padding: 11px 22px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 15px; letter-spacing: 2px; transition: .2s; border: none; }
@@ -499,4 +646,24 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); if (toastTimer) cle
   .rank-row { grid-template-columns: 32px 1fr 80px; grid-auto-rows: auto; }
   .rk-stone, .rk-pay { display: none; }
 }
+
+/* 落格效果弹窗 */
+.fx-pop { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); z-index: 9500; pointer-events: none;
+  width: min(340px, 86vw); padding: 22px 20px 20px; border-radius: 18px; text-align: center;
+  background: linear-gradient(180deg, rgba(16,23,44,.97), rgba(8,12,24,.97));
+  border: 1px solid rgba(233,200,120,.4); box-shadow: 0 24px 80px rgba(0,0,0,.6); }
+.fx-pop.fx-up { border-color: rgba(124,255,176,.65); box-shadow: 0 0 42px rgba(124,255,176,.35), 0 24px 80px rgba(0,0,0,.6); }
+.fx-pop.fx-down { border-color: rgba(255,138,138,.65); box-shadow: 0 0 42px rgba(255,138,138,.35), 0 24px 80px rgba(0,0,0,.6); }
+.fx-icon { font-size: 52px; line-height: 1; margin-bottom: 6px; animation: fxPop .5s ease; }
+.fx-title { font-size: 17px; color: var(--gold-2); font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+.fx-text { font-size: 14px; color: var(--ink-dim); line-height: 1.7; margin-bottom: 8px; }
+.fx-delta { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+.fx-delta.up { color: #7CFFB0; } .fx-delta.down { color: #ff8a8a; }
+@keyframes fxPop {
+  0% { transform: scale(.4); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.fx-enter-active, .fx-leave-active { transition: all .35s ease; }
+.fx-enter-from, .fx-leave-to { opacity: 0; transform: translate(-50%, -50%) scale(.7); }
 </style>
