@@ -52,12 +52,15 @@
       </div>
     </header>
 
-    <!-- ===== 内容区：仅此区域随路由切换 ===== -->
-    <main class="app-main">
-      <router-view v-slot="{ Component }">
-        <component :is="Component" />
-      </router-view>
-    </main>
+    <!-- ===== 主体：左侧栏（持久） + 内容区（随路由切换） ===== -->
+    <div class="body-row">
+      <Sidebar v-if="showNav" :unread="unreadTotal" />
+      <main class="app-main">
+        <router-view v-slot="{ Component }">
+          <component :is="Component" />
+        </router-view>
+      </main>
+    </div>
 
     <!-- 全局对战监听：常驻，任意页面都能接收对战请求/播放动画 -->
     <DuelListener v-if="showNav" />
@@ -79,6 +82,7 @@ import { heartbeat } from './api/duel'
 import { getUnread } from './api/chat'
 import { fetchAuctionStatus } from './api/auction'
 import QiParticles from './components/QiParticles.vue'
+import Sidebar from './components/Sidebar.vue'
 import DuelListener from './components/DuelListener.vue'
 import FriendListener from './components/FriendListener.vue'
 
@@ -231,8 +235,13 @@ watch(() => route.fullPath, () => { nextTick(onScroll); closeUserMenu() })
   display:flex;flex-direction:column;
   height:100%;width:100%;
 }
-.app-main{
+/* 主体横向布局：左侧栏 + 内容区 */
+.body-row{
   flex:1;min-height:0;
+  display:flex;flex-direction:row;
+}
+.app-main{
+  flex:1;min-width:0;min-height:0;
   display:flex;flex-direction:column;
 }
 
