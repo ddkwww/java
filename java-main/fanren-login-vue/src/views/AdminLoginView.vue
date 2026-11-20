@@ -1,9 +1,11 @@
 <template>
   <div class="stage">
+    <GardenerDecor />
     <div class="panel">
       <LoginVisual />
       <LoginForm
         :show-register="false"
+        :mascot="false"
         :admin="true"
         title="后台管理系统"
         subtitle="请输入管理员账号与法诀，以入管理中枢"
@@ -17,6 +19,7 @@
 <script setup>
 import LoginVisual from '../components/LoginVisual.vue'
 import LoginForm from '../components/LoginForm.vue'
+import GardenerDecor from '../components/GardenerDecor.vue'
 </script>
 
 <style scoped>
