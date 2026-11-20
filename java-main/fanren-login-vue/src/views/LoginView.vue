@@ -1,5 +1,6 @@
 <template>
   <div class="stage">
+    <GardenerDecor />
     <div class="panel">
       <LoginVisual />
       <LoginForm />
@@ -10,6 +11,7 @@
 <script setup>
 import LoginVisual from '../components/LoginVisual.vue'
 import LoginForm from '../components/LoginForm.vue'
+import GardenerDecor from '../components/GardenerDecor.vue'
 </script>
 
 <style scoped>
