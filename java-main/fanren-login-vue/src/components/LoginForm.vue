@@ -1,6 +1,7 @@
 <template>
   <section class="form-side">
     <form class="card" @submit.prevent="onSubmit" autocomplete="off">
+      <img v-if="mascot" class="mascot" src="/mascot.png" alt="开心道友" aria-hidden="true">
       <h2>{{ title }}</h2>
       <p class="hint">{{ subtitle }}</p>
 
@@ -51,7 +52,8 @@ const props = defineProps({
   submitText: { type: String, default: '登 仙' },
   showRegister: { type: Boolean, default: true },
   redirect: { type: String, default: '/' },
-  admin: { type: Boolean, default: false } // true 时走后台管理员登录接口（仅 permission=0 可成功）
+  admin: { type: Boolean, default: false }, // true 时走后台管理员登录接口（仅 permission=0 可成功）
+  mascot: { type: Boolean, default: true } // 是否展示右侧吉祥物形象（后台登录页可关闭）
 })
 
 const username = ref('')
@@ -112,6 +114,13 @@ onUnmounted(() => clearTimeout(toastTimer))
 }
 .card{width:100%;max-width:330px;animation:rise .9s cubic-bezier(.2,.8,.2,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.mascot{
+  display:block;width:132px;height:132px;object-fit:contain;
+  margin:0 auto 6px;
+  filter:drop-shadow(0 12px 20px rgba(0,0,0,.45)) drop-shadow(0 0 18px rgba(233,200,120,.28));
+  animation:float 3.2s ease-in-out infinite;
+}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 .card h2{font-size:30px;letter-spacing:6px;margin-bottom:6px;
   background:linear-gradient(180deg,#fff,var(--qi));-webkit-background-clip:text;background-clip:text;color:transparent}
 .card .hint{color:var(--ink-dim);font-size:13px;letter-spacing:2px;margin-bottom:26px}

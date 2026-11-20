@@ -5,6 +5,7 @@
       <LoginVisual />
       <LoginForm
         :show-register="false"
+        :mascot="false"
         :admin="true"
         title="后台管理系统"
         subtitle="请输入管理员账号与法诀，以入管理中枢"
