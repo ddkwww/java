@@ -1,7 +1,7 @@
 <template>
   <div class="tj-wrap">
     <div class="tj-head">
-      <h1 class="tj-title">天 骄 榜</h1>
+      <h1 class="tj-title">地 骄 榜</h1>
       <p class="tj-sub">群雄并起 · 以境界论高低 · 每 60 秒自动刷新</p>
     </div>
 
@@ -61,7 +61,7 @@ async function load() {
     if (Array.isArray(data)) list.value = data
     error.value = ''
   } catch (e) {
-    error.value = e.message || '获取天骄榜失败'
+    error.value = e.message || '获取地骄榜失败'
   } finally {
     loading.value = false
     lastUpdated.value = new Date()
