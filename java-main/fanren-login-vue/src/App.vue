@@ -19,7 +19,7 @@
         <a :class="{ active: isTreasures }" @click.prevent="goTreasures">法宝</a>
         <a :class="{ active: isStats }" @click.prevent="goStats">修为</a>
         <!-- <a :class="{ active: isSects }" @click.prevent="goSects">门派</a> -->
-        <a :class="{ active: isTianjiao }" @click.prevent="goTianjiao">天骄榜</a>
+        <a :class="{ active: isTianjiao }" @click.prevent="goTianjiao">地骄榜</a>
         <a :class="{ active: isDuel }" @click.prevent="goDuel">对战</a>
         <a :class="{ active: isAuction }" @click.prevent="goAuction">拍卖行</a>
         <a :class="{ active: isGames }" @click.prevent="goGames">小游戏</a>

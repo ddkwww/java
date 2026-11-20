@@ -1,4 +1,4 @@
-// 排行榜 API（天骄榜）
+// 排行榜 API（地骄榜）
 // 契约（后端 RankingController）：
 //   GET  /api/ranking/tianjiao   Header Authorization: Bearer <token>
 //       -> [ { rank, username, realm, totalLevel } ]  （按 totalLevel 降序，前 10 名）
@@ -15,7 +15,7 @@ export async function getTianjiao() {
     credentials: 'include'
   })
   if (!res.ok) {
-    let msg = '获取天骄榜失败'
+    let msg = '获取地骄榜失败'
     try {
       const data = await res.json()
       msg = data.message || msg
