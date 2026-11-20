@@ -31,7 +31,7 @@ public class RankingController {
         this.tokenStore = tokenStore;
     }
 
-    /** 天骄榜：取修为前 100 名 */
+    /** 地骄榜：取修为前 100 名 */
     @GetMapping("/tianjiao")
     public ResponseEntity<?> tianjiao(@RequestHeader(value = "Authorization", required = false) String auth) {
         User u = resolveUser(auth);

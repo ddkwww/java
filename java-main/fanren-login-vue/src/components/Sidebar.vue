@@ -93,7 +93,7 @@ const navs = computed(() => [
   { name: 'treasures', label: '法宝阁',   icon: '宝', path: '/treasures',   active: ['treasures', 'treasure'].includes(route.name) },
   { name: 'stats',     label: '修为',     icon: '修', path: '/stats',       active: route.name === 'stats' },
   { name: 'sects',     label: '门派',     icon: '派', path: '/sects',       active: route.name === 'sects' },
-  { name: 'tianjiao',  label: '天骄榜',   icon: '骄', path: '/tianjiao',    active: route.name === 'tianjiao' },
+  { name: 'tianjiao',  label: '地骄榜',   icon: '骄', path: '/tianjiao',    active: route.name === 'tianjiao' },
   { name: 'duel',      label: '论道对战', icon: '战', path: '/duel',        active: route.name === 'duel' },
   { name: 'auction',   label: '拍卖行',   icon: '拍', path: '/auction',     active: route.name === 'auction' },
   { name: 'games',     label: '小游戏',   icon: '戏', path: '/games',       active: ['games', 'monopoly'].includes(route.name) },
